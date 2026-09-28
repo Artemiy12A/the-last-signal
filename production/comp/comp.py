@@ -189,7 +189,7 @@ def composite(layers: dict, P: CompParams, t: float = 0.0) -> np.ndarray:
     H, W = any_.shape[:2]
     G = P.gains
     far = np.zeros((H, W, 3), np.float32)
-    for n in ("sky", "stars", "haze", "disk"):
+    for n in ("sky", "stars", "haze", "disk", "beacon"):
         if n in layers:
             far += layers[n][..., :3] * _gain(G.get(n, 1.0))
     far = dof(far, P.coc_px, P.bokeh_ratio)

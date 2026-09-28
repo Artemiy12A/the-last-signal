@@ -640,7 +640,6 @@ def plume(name, ctrl, strength=1.6, color=(0.30, 0.50, 1.0), r0=0.55, spread=0.1
     em.inputs["Color"].default_value = (*color, 1.0)
     t.set(em.inputs["Strength"], t.mul(dens, t.mul(k, strength)))
     t.output(vol=em.outputs[0])
-    m.surface_render_method = 'BLENDED' if hasattr(m, "surface_render_method") else None
     return m
 
 
@@ -682,6 +681,7 @@ def build_library(ctrl) -> dict:
     M["dish_white"] = dish_paint("SHIP_Dish_White")
     M["alu"] = brushed_alu("SHIP_Alu_Brushed")
     M["alu_anod"] = anodized("SHIP_Alu_Anodized")
+    M["alu_polish"] = brushed_alu("SHIP_Alu_Polished", base=(0.88, 0.89, 0.90), rough=0.03, aniso=0.2)
     M["alu_dark"] = anodized("SHIP_Alu_DarkAnod", base=(0.10, 0.10, 0.11), rough=0.38)
     M["composite"] = composite("SHIP_Composite")
     M["radiator"] = radiator("SHIP_Radiator")
@@ -695,6 +695,7 @@ def build_library(ctrl) -> dict:
     M["stencil_black"] = stencil("SHIP_Stencil_Black")
     M["stencil_red"] = stencil("SHIP_Stencil_Red", (0.36, 0.025, 0.02))
     M["stencil_yellow"] = stencil("SHIP_Stencil_Yellow", (0.62, 0.42, 0.04))
+    M["stencil_white"] = stencil("SHIP_Stencil_White", (0.62, 0.62, 0.60))
     M["beacon"] = lamp("SHIP_Lamp_Beacon", (0.82, 0.88, 1.0), 900.0, "beacon", ctrl, (0.85, 0.85, 0.88))
     M["nav_red"] = lamp("SHIP_Lamp_NavRed", (1.0, 0.02, 0.01), 60.0, "nav", ctrl, (0.35, 0.02, 0.02))
     M["nav_green"] = lamp("SHIP_Lamp_NavGreen", (0.02, 1.0, 0.22), 45.0, "nav", ctrl, (0.02, 0.3, 0.06))

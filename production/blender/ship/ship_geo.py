@@ -283,12 +283,13 @@ class MeshBuilder:
         return self.box((h, w, L), mat, xf, center=(0, 0, L / 2), bevel=bevel, rnd=rnd)
 
     def grid(self, w, h, nu, nv, mat, xf=None, height=None, uv_off=(0.0, 0.0), uv_rot=0.0, seam_uv=True,
-             rnd=None, back=False):
+             rnd=None, back=False, us=None, vs=None):
         """Rectangular grid in local XY centred at origin, displaced along +Z by height(u, v) (u, v in
         metres from the lower-left corner). UVMap = metres (+offset/rotation), Seam = distance to the
         nearest edge along each axis."""
-        us = np.linspace(0, w, nu + 1)
-        vs = np.linspace(0, h, nv + 1)
+        us = np.linspace(0, w, nu + 1) if us is None else np.asarray(us, float)
+        vs = np.linspace(0, h, nv + 1) if vs is None else np.asarray(vs, float)
+        nu, nv = len(us) - 1, len(vs) - 1
         U, Vv = np.meshgrid(us, vs, indexing="xy")
         Z = height(U, Vv) if height is not None else np.zeros_like(U)
         P = np.stack([U - w / 2, Vv - h / 2, Z], -1).reshape(-1, 3)
