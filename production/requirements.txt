@@ -1,0 +1,7 @@
+# THE LAST SIGNAL (90 s) pipeline, Python 3.11+
+numpy>=2.0
+scipy>=1.13
+pillow>=10.0
+OpenEXR>=3.3
+soundfile>=0.12
+pyloudnorm>=0.1.1

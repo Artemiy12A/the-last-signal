@@ -645,6 +645,16 @@ int main(int argc, char** argv) {
     add_rgb("disk", L_disk); add_rgb("haze", L_haze); add_rgb("sky", L_sky); add_rgb("stars", L_star);
     chs.push_back({"A", L_A});
     chs.push_back({"hole", L_hole});
+    if (J.value("output", std::string("layers")) == "beauty") {
+        // single RGBA beauty (e.g. an environment probe for Blender): disk + haze + sky + stars
+        chs.clear();
+        std::vector<float> R(L_disk.size()), G(L_disk.size()), B(L_disk.size()), Al(L_disk.size(), 1.f);
+        for (size_t i = 0; i < L_disk.size(); ++i) {
+            RGB c = L_disk[i] + L_haze[i] + L_sky[i] + L_star[i];
+            R[i] = c.r; G[i] = c.g; B[i] = c.b;
+        }
+        chs.push_back({"A", Al}); chs.push_back({"B", B}); chs.push_back({"G", G}); chs.push_back({"R", R});
+    }
     std::sort(chs.begin(), chs.end(), [](const Ch& x, const Ch& y) { return x.name < y.name; });
 
     EXRHeader header; InitEXRHeader(&header);

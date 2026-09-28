@@ -1,0 +1,248 @@
+name: THE LAST SIGNAL (90 s) render farm
+
+# Start a render:
+#   1. Actions -> "THE LAST SIGNAL (90 s) render farm" -> Run workflow (pick quality / frames / publish), or
+#   2. commit a change to production/render-request.json on any branch (the session's only way in).
+on:
+  workflow_dispatch:
+    inputs:
+      quality:
+        description: "draft (480p) | preview (960) | final (1920x804)"
+        type: choice
+        options: [draft, preview, final]
+        default: preview
+      frames:
+        description: "all | shot ids (S10,S11) | ranges (1164-1439)"
+        type: string
+        default: all
+      every:
+        description: "render every Nth frame (held for N frames)"
+        type: string
+        default: "1"
+      jobs:
+        description: "parallel render jobs (max 20 run at once)"
+        type: string
+        default: "20"
+      publish:
+        description: "publish the result as a GitHub release"
+        type: choice
+        options: [none, prerelease, release]
+        default: prerelease
+      tag:
+        description: "release tag (auto if empty)"
+        type: string
+        default: ""
+  push:
+    paths:
+      - production/render-request.json
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tls90-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BLENDER_VERSION: "4.5.14"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.p.outputs.matrix }}
+      quality: ${{ steps.p.outputs.quality }}
+      every: ${{ steps.p.outputs.every }}
+      publish: ${{ steps.p.outputs.publish }}
+      tag: ${{ steps.p.outputs.tag }}
+      needs_blender: ${{ steps.p.outputs.needs_blender }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy
+      - id: p
+        env:
+          EVENT: ${{ github.event_name }}
+          IN_Q: ${{ inputs.quality }}
+          IN_FRAMES: ${{ inputs.frames }}
+          IN_EVERY: ${{ inputs.every }}
+          IN_JOBS: ${{ inputs.jobs }}
+          IN_PUB: ${{ inputs.publish }}
+          IN_TAG: ${{ inputs.tag }}
+        run: |
+          python - <<'EOF'
+          import json, os, sys, time
+          sys.path.insert(0, "production")
+          from tls import farm, edl
+          if os.environ["EVENT"] == "workflow_dispatch":
+              req = {"quality": os.environ["IN_Q"], "frames": os.environ["IN_FRAMES"], "every": int(os.environ["IN_EVERY"] or 1),
+                     "jobs": int(os.environ["IN_JOBS"] or 20), "publish": os.environ["IN_PUB"], "tag": os.environ["IN_TAG"]}
+          else:
+              req = json.load(open("production/render-request.json"))
+          q = req.get("quality", "preview")
+          frames = farm.parse_frames(req.get("frames", "all"))
+          every = int(req.get("every", 1))
+          shards = farm.plan(frames, q, int(req.get("jobs", 20)), every)
+          tag = req.get("tag") or f"tls90-{q}-{time.strftime('%Y%m%d-%H%M')}"
+          ids = {edl.shot_at(edl.frame_time(f) + 1e-6).id for f in frames}
+          needs_bl = any(("blender" in edl.SHOT_BY_ID[i].layers) for i in ids)
+          out = {"matrix": json.dumps(shards), "quality": q, "every": str(every),
+                 "publish": req.get("publish", "none"), "tag": tag, "needs_blender": str(needs_bl).lower()}
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              for k, v in out.items():
+                  f.write(f"{k}={v}\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write(f"### Render plan: {q}, {len(frames)} frames (every {every}), {len(shards)} jobs, publish={out['publish']}, tag={tag}\n\n")
+              for s in shards:
+                  f.write(f"- job {s['id']}: frames {s['frames']} (~{s['est_min']} min)\n")
+          EOF
+
+  build:
+    needs: plan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: production/requirements.txt
+      - run: pip install -r production/requirements.txt
+      - name: Build tracer (portable AVX2)
+        run: make -C production/tracer ARCH=-march=x86-64-v3 && production/tracer/build/tracer --help || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tracer
+          path: production/tracer/build/tracer
+          retention-days: 3
+      - name: Sky cache
+        id: sky
+        uses: actions/cache@v4
+        with:
+          path: production/cache/sky
+          key: sky-v1-${{ hashFiles('production/tools/build_sky.py') }}
+      - name: Build sky (Tycho-2 stars, Milky Way map)
+        if: steps.sky.outputs.cache-hit != 'true'
+        run: python production/tools/build_sky.py all
+
+  render:
+    needs: [plan, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: production/requirements.txt
+      - name: System deps
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg libgomp1 > /dev/null
+      - run: pip install -r production/requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: tracer
+          path: production/tracer/build
+      - run: chmod +x production/tracer/build/tracer
+      - uses: actions/cache/restore@v4
+        with:
+          path: production/cache/sky
+          key: sky-v1-${{ hashFiles('production/tools/build_sky.py') }}
+          fail-on-cache-miss: true
+      - name: Blender cache
+        if: needs.plan.outputs.needs_blender == 'true'
+        id: bl
+        uses: actions/cache@v4
+        with:
+          path: /opt/blender
+          key: blender-${{ env.BLENDER_VERSION }}
+      - name: Install Blender
+        if: needs.plan.outputs.needs_blender == 'true' && steps.bl.outputs.cache-hit != 'true'
+        run: |
+          sudo mkdir -p /opt/blender && sudo chown $USER /opt/blender
+          curl -sSL https://download.blender.org/release/Blender4.5/blender-${BLENDER_VERSION}-linux-x64.tar.xz | tar xJ -C /opt/blender
+      - name: Textures cache
+        if: needs.plan.outputs.needs_blender == 'true'
+        id: tex
+        uses: actions/cache@v4
+        with:
+          path: production/cache/textures
+          key: textures-${{ hashFiles('production/blender/**/fetch_textures.py') }}
+      - name: Fetch textures
+        if: needs.plan.outputs.needs_blender == 'true' && steps.tex.outputs.cache-hit != 'true'
+        run: |
+          for f in production/blender/*/fetch_textures.py; do [ -f "$f" ] && python "$f"; done || true
+      - name: Render shard ${{ matrix.shard.id }} (${{ matrix.shard.frames }})
+        run: |
+          cd production && python -m tls.farm shard --quality ${{ needs.plan.outputs.quality }} \
+            --frames "${{ matrix.shard.frames }}" --every ${{ needs.plan.outputs.every }} --out ../seg --deadline 320
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: seg-${{ matrix.shard.id }}
+          path: seg/*.mov
+          retention-days: 7
+          if-no-files-found: warn
+
+  assemble:
+    needs: [plan, render]
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: production/requirements.txt
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
+      - run: pip install -r production/requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: seg-*
+          path: segs
+          merge-multiple: true
+      - name: Soundtrack
+        run: |
+          if [ -f production/audio/make_soundtrack.py ]; then python production/audio/make_soundtrack.py; fi
+      - name: Assemble, encode
+        run: |
+          cd production && python -m tls.farm assemble --quality ${{ needs.plan.outputs.quality }} \
+            --segments ../segs --out ../dist --audio cache/audio/soundtrack.wav
+      - uses: actions/upload-artifact@v4
+        with:
+          name: film-${{ needs.plan.outputs.quality }}
+          path: |
+            dist/*.mp4
+            dist/contact_sheet.jpg
+            dist/stills/*.jpg
+          retention-days: 30
+      - name: Publish release
+        if: needs.plan.outputs.publish != 'none'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          Q: ${{ needs.plan.outputs.quality }}
+          PUB: ${{ needs.plan.outputs.publish }}
+        run: |
+          MISSING=$(python -c "import json;print(len(json.load(open('dist/missing_frames.json'))))")
+          {
+            echo "**THE LAST SIGNAL** — ${Q} render of commit ${GITHUB_SHA::7}."
+            echo
+            echo "On iPhone: tap the **.mp4** below → it plays in the browser → Share → Save Video."
+            echo
+            echo "Frames missing (filled with black): ${MISSING}"
+          } > notes.md
+          FLAGS=""
+          [ "$PUB" = "prerelease" ] && FLAGS="--prerelease"
+          FILES="dist/*.mp4 dist/contact_sheet.jpg dist/stills/*.jpg"
+          [ "$Q" = "final" ] && FILES="$FILES dist/*_master_*.mov"
+          gh release create "$TAG" $FILES --target "$GITHUB_SHA" --title "THE LAST SIGNAL — ${Q} (${TAG})" --notes-file notes.md $FLAGS

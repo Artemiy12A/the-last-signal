@@ -1,0 +1,213 @@
+"""Render farm helpers (GitHub Actions): plan shards, render a shard, assemble the film.
+
+  python -m tls.farm plan --request production/render-request.json      -> writes matrix JSON to stdout
+  python -m tls.farm shard --quality final --frames 1164-1260 --out seg  -> frames + ProRes segment
+  python -m tls.farm assemble --quality final --segments segs --out dist
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from . import edl  # noqa: E402
+from .paths import OUT, PROD, ROOT  # noqa: E402
+
+# rough relative cost per frame (final quality, 4 vCPU seconds) used for load balancing
+COST = {
+    "BLK0": 1, "BLK1": 1, "TITLE": 3, "BTN": 1,
+    "S01": 60, "S02": 200, "S03": 220, "S04": 160, "S05": 200, "S06": 200, "S07": 260, "S08": 320,
+    "S09": 200, "S10": 420, "S11": 360, "S12": 480, "S13": 300, "S14": 200, "S15": 300,
+}
+QSCALE = {"draft": 1 / 16, "preview": 1 / 4, "final": 1.0}
+
+
+def frame_cost(f: int, q: str) -> float:
+    s = edl.shot_at(edl.frame_time(f) + 1e-6)
+    return COST.get(s.id, 100) * QSCALE[q]
+
+
+def parse_frames(spec: str) -> list[int]:
+    if spec in ("all", "", None):
+        return list(range(edl.NFRAMES))
+    out = []
+    for part in spec.split(","):
+        part = part.strip()
+        if part in edl.SHOT_BY_ID:
+            s = edl.SHOT_BY_ID[part]
+            out += list(range(s.f0, s.f1))
+        elif "-" in part:
+            a, b = part.split("-")
+            out += list(range(int(a), int(b) + 1))
+        elif part:
+            out.append(int(part))
+    return sorted(set(out))
+
+
+def plan(frames: list[int], q: str, jobs: int, every: int = 1) -> list[dict]:
+    """Split frames into `jobs` contiguous shards of ~equal cost."""
+    frames = frames[::every]
+    costs = [frame_cost(f, q) for f in frames]
+    total = sum(costs)
+    jobs = max(1, min(jobs, len(frames)))
+    target = total / jobs
+    shards, cur, acc = [], [], 0.0
+    for f, c in zip(frames, costs):
+        cur.append(f)
+        acc += c
+        if acc >= target and len(shards) < jobs - 1:
+            shards.append(cur)
+            cur, acc = [], 0.0
+    if cur:
+        shards.append(cur)
+    return [{"id": i, "frames": ",".join(_compress(s)), "n": len(s),
+             "est_min": round(sum(frame_cost(f, q) for f in s) / 60, 1)} for i, s in enumerate(shards)]
+
+
+def _compress(fs: list[int]) -> list[str]:
+    out, i = [], 0
+    while i < len(fs):
+        j = i
+        while j + 1 < len(fs) and fs[j + 1] == fs[j] + 1:
+            j += 1
+        out.append(f"{fs[i]}-{fs[j]}" if j > i else str(fs[i]))
+        i = j + 1
+    return out
+
+
+def ffmpeg(*args):
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *map(str, args)]
+    subprocess.run(cmd, check=True)
+
+
+def _runs(fs: list[int], step: int) -> list[tuple[int, int]]:
+    """Group sorted frames into runs with constant spacing `step`."""
+    out, i = [], 0
+    while i < len(fs):
+        j = i
+        while j + 1 < len(fs) and fs[j + 1] == fs[j] + step:
+            j += 1
+        out.append((fs[i], fs[j]))
+        i = j + 1
+    return out
+
+
+def shard(q: str, frames_spec: str, out: Path, deadline_min: float = 330.0, every: int = 1):
+    """Render frames (resumable: existing PNGs are kept) then encode ProRes 4444 segments per
+    contiguous run. Stops early (cleanly) if the deadline approaches."""
+    from .render import render_frame
+    t_start = time.time()
+    frames = parse_frames(frames_spec)
+    fdir = OUT / q / "_frames"
+    fdir.mkdir(parents=True, exist_ok=True)
+    done = []
+    for f in frames:
+        png = fdir / f"f{f:05d}.png"
+        if not png.exists():
+            if (time.time() - t_start) / 60 > deadline_min:
+                print(f"deadline reached before frame {f}", flush=True)
+                break
+            s = edl.shot_at(edl.frame_time(f) + 1e-6)
+            p = render_frame(s.id, f, q, png16=True, keep_exr=False, outdir=OUT / q / s.id)
+            shutil.move(str(p), png)
+        done.append(f)
+    out.mkdir(parents=True, exist_ok=True)
+    for a, b in _runs(done, every):
+        last = min(b + every - 1, edl.NFRAMES - 1)
+        seg = out / f"seg_{a:05d}_{last:05d}.mov"
+        lst = out / f"list_{a:05d}.txt"
+        body = ""
+        for f in range(a, b + 1, every):
+            body += f"file '{fdir / f'f{f:05d}.png'}'\nduration {min(every, last - f + 1) / edl.FPS:.6f}\n"
+        body += f"file '{fdir / f'f{b:05d}.png'}'\n"   # concat demuxer quirk: repeat last entry
+        lst.write_text(body)
+        ffmpeg("-f", "concat", "-safe", "0", "-i", lst, "-vf", f"fps={edl.FPS}", "-frames:v", last - a + 1,
+               "-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuv444p10le", "-vendor", "apl0", seg)
+        lst.unlink()
+    print(f"shard: {len(done)}/{len(frames)} frames -> {out}", flush=True)
+
+
+def assemble(q: str, segdir: Path, out: Path, audio: Path | None, title: str):
+    out.mkdir(parents=True, exist_ok=True)
+    segs = sorted(segdir.rglob("seg_*.mov"))
+    have = set()
+    for s in segs:
+        a, b = map(int, s.stem.split("_")[1:3])
+        have.update(range(a, b + 1))
+    missing = [f for f in range(edl.NFRAMES) if f not in have]
+    print(f"assemble: {len(segs)} segments, {len(have)} frames, {len(missing)} missing", flush=True)
+    # fill gaps with black so timing stays locked (reported in the release notes)
+    W, H = 1920 if q == "final" else (960 if q == "preview" else 480), 0
+    H = int(round(W / 2.39 / 2)) * 2
+    fill = []
+    for run in _compress(missing):
+        a, b = (run.split("-") + [run])[:2]
+        a, b = int(a), int(b)
+        seg = segdir / f"seg_{a:05d}_{b:05d}.mov"
+        ffmpeg("-f", "lavfi", "-i", f"color=c=black:s={W}x{H}:r={edl.FPS}", "-frames:v", b - a + 1,
+               "-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuv444p10le", seg)
+        fill.append(seg)
+    segs = sorted(list(segdir.rglob("seg_*.mov")), key=lambda p: int(p.stem.split("_")[1]))
+    lst = out / "segments.txt"
+    lst.write_text("".join(f"file '{s.resolve()}'\n" for s in segs))
+    joined = out / "joined.mov"
+    ffmpeg("-f", "concat", "-safe", "0", "-i", lst, "-c", "copy", joined)
+    base = "THE_LAST_SIGNAL" + ("" if q == "final" else f"_{q}")
+    master = out / f"{base}_master_ProRes422HQ.mov"
+    mp4 = out / f"{base}.mp4"
+    a_in = ["-i", audio] if audio and audio.exists() else []
+    a_map = ["-map", "0:v", "-map", "1:a"] if a_in else []
+    ffmpeg("-i", joined, *a_in, *a_map, "-c:v", "prores_ks", "-profile:v", "3", "-pix_fmt", "yuv422p10le",
+           "-vendor", "apl0", *(["-c:a", "pcm_s24le"] if a_in else []), "-t", edl.DURATION,
+           "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", master)
+    ffmpeg("-i", joined, *a_in, *a_map, "-c:v", "libx264", "-preset", "slow", "-crf", "14" if q == "final" else "18",
+           "-tune", "grain", "-profile:v", "high", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+           "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
+           *(["-c:a", "aac", "-b:a", "320k"] if a_in else []), "-t", edl.DURATION, mp4)
+    joined.unlink()
+    # stills + contact sheet
+    stills = out / "stills"
+    stills.mkdir(exist_ok=True)
+    for s in edl.SHOTS:
+        if s.kind == "shot":
+            tm = s.start + 0.6 * s.dur
+            ffmpeg("-ss", f"{tm:.3f}", "-i", mp4, "-frames:v", 1, "-q:v", 2, stills / f"{s.id}.jpg")
+    ffmpeg("-i", mp4, "-vf", "fps=1,scale=384:-1,tile=6x15:padding=4:margin=4", "-frames:v", 1, "-q:v", 3,
+           out / "contact_sheet.jpg")
+    (out / "missing_frames.json").write_text(json.dumps(missing))
+    print(f"assemble: -> {mp4}, {master}", flush=True)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("cmd", choices=["plan", "shard", "assemble"])
+    ap.add_argument("--request", type=Path)
+    ap.add_argument("--quality", default="preview")
+    ap.add_argument("--frames", default="all")
+    ap.add_argument("--jobs", type=int, default=20)
+    ap.add_argument("--every", type=int, default=1)
+    ap.add_argument("--out", type=Path, default=Path("seg"))
+    ap.add_argument("--segments", type=Path, default=Path("segs"))
+    ap.add_argument("--audio", type=Path, default=None)
+    ap.add_argument("--deadline", type=float, default=330.0)
+    a = ap.parse_args()
+    if a.cmd == "plan":
+        req = json.loads(a.request.read_text()) if a.request else {}
+        q = req.get("quality", a.quality)
+        shards = plan(parse_frames(req.get("frames", a.frames)), q, int(req.get("jobs", a.jobs)), int(req.get("every", 1)))
+        print(json.dumps({"quality": q, "shards": shards}))
+    elif a.cmd == "shard":
+        shard(a.quality, a.frames, a.out, a.deadline, a.every)
+    elif a.cmd == "assemble":
+        assemble(a.quality, a.segments, a.out, a.audio, "THE LAST SIGNAL")
+
+
+if __name__ == "__main__":
+    main()
