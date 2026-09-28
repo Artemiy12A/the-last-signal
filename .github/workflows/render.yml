@@ -1,0 +1,173 @@
+name: Render THE LAST SIGNAL
+
+# Two ways to start a render:
+#   1. Actions tab -> "Render THE LAST SIGNAL" -> Run workflow   (works from iPhone Safari)
+#   2. Push a commit whose message contains [render], [render preview] or [render final]
+on:
+  workflow_dispatch:
+    inputs:
+      quality:
+        description: "final = 1080p master (~25 min) | preview = 720p (~10 min) | draft = 540p quick check (~5 min)"
+        type: choice
+        options: [final, preview, draft]
+        default: final
+      publish:
+        description: "Publish the MP4 as a GitHub Release (easiest download on iPhone)"
+        type: boolean
+        default: true
+  push:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: render-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[render')
+    runs-on: ubuntu-24.04
+    outputs:
+      quality: ${{ steps.p.outputs.quality }}
+      count: ${{ steps.p.outputs.count }}
+      shards: ${{ steps.p.outputs.shards }}
+      publish: ${{ steps.p.outputs.publish }}
+    steps:
+      - id: p
+        env:
+          EVENT: ${{ github.event_name }}
+          IN_QUALITY: ${{ inputs.quality }}
+          IN_PUBLISH: ${{ inputs.publish }}
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            q="$IN_QUALITY"; pub="$IN_PUBLISH"
+          else
+            case "$MSG" in
+              *"[render final]"*) q=final; pub=true ;;
+              *"[render preview]"*) q=preview; pub=false ;;
+              *) q=draft; pub=false ;;
+            esac
+          fi
+          # Parallel render jobs. Private repos get 2-vCPU runners, so final is split 10 ways.
+          case "$q" in final) n=10 ;; preview) n=4 ;; *) n=1 ;; esac
+          echo "quality=$q" >> "$GITHUB_OUTPUT"
+          echo "count=$n" >> "$GITHUB_OUTPUT"
+          echo "shards=$(python3 -c "import json; print(json.dumps(list(range($n))))")" >> "$GITHUB_OUTPUT"
+          echo "publish=$pub" >> "$GITHUB_OUTPUT"
+          echo "Rendering **$q** in $n shard(s), publish release: $pub" >> "$GITHUB_STEP_SUMMARY"
+
+  render:
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install renderer (Mesa llvmpipe OpenGL, ffmpeg, Python deps)
+        run: ./scripts/setup.sh
+      - name: Render frames
+        run: >
+          python -m lastsignal segment
+          --quality ${{ needs.plan.outputs.quality }}
+          --shard ${{ matrix.shard }} --shards ${{ needs.plan.outputs.count }}
+          --out segments/seg_$(printf '%02d' ${{ matrix.shard }}).mp4
+      - uses: actions/upload-artifact@v7
+        with:
+          name: segment-${{ matrix.shard }}
+          path: segments/*.mp4
+          retention-days: 3
+          if-no-files-found: ignore
+          compression-level: 0
+
+  assemble:
+    needs: [plan, render]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install renderer
+        run: ./scripts/setup.sh
+      - name: Self-test (timeline continuity, one frame per shot, soundtrack)
+        run: python -m lastsignal selftest
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: segment-*
+          path: segments
+          merge-multiple: true
+      - name: Soundtrack, concat, mux, contact sheet, verification
+        run: python -m lastsignal assemble --quality ${{ needs.plan.outputs.quality }} --segments segments
+      - name: Collect outputs
+        id: files
+        run: |
+          q=${{ needs.plan.outputs.quality }}
+          mkdir -p dist
+          cp "out/$q/THE_LAST_SIGNAL_$q.mp4" dist/
+          cp "out/$q/contact_sheet_$q.jpg" dist/
+          cp "out/$q/verify.json" "dist/verify_$q.json"
+          cp out/audio/the_last_signal.wav dist/
+          ls -la dist
+      # Unzipped uploads: tap the artifact on iPhone and the MP4 / JPG downloads directly.
+      - uses: actions/upload-artifact@v7
+        with:
+          path: dist/THE_LAST_SIGNAL_${{ needs.plan.outputs.quality }}.mp4
+          archive: false
+          retention-days: 30
+      - uses: actions/upload-artifact@v7
+        with:
+          path: dist/contact_sheet_${{ needs.plan.outputs.quality }}.jpg
+          archive: false
+          retention-days: 30
+      - uses: actions/upload-artifact@v7
+        with:
+          name: extras-${{ needs.plan.outputs.quality }}
+          path: |
+            dist/verify_${{ needs.plan.outputs.quality }}.json
+            dist/the_last_signal.wav
+          retention-days: 30
+      - name: Publish GitHub Release
+        if: needs.plan.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          Q: ${{ needs.plan.outputs.quality }}
+        run: |
+          tag="trailer-$Q-${GITHUB_RUN_NUMBER}"
+          {
+            echo "**THE LAST SIGNAL** — $Q render, run #${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA::7}."
+            echo
+            echo "On iPhone: tap **THE_LAST_SIGNAL_$Q.mp4** below, then Share → Save Video."
+            echo
+            echo '```'
+            python -c "import json; r=json.load(open('dist/verify_$Q.json')); print(r['video']); print(r['audio']); print(f\"{r['duration']:.2f}s, {r['size_mb']} MB, checks ok: {r['ok']}\")"
+            echo '```'
+          } > notes.md
+          gh release create "$tag" \
+            "dist/THE_LAST_SIGNAL_$Q.mp4" "dist/contact_sheet_$Q.jpg" "dist/verify_$Q.json" \
+            --target "$GITHUB_SHA" --title "THE LAST SIGNAL — $Q (run ${GITHUB_RUN_NUMBER})" --notes-file notes.md
+          echo "RELEASE_URL=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/$tag" >> "$GITHUB_ENV"
+      - name: Summary
+        env:
+          Q: ${{ needs.plan.outputs.quality }}
+        run: |
+          {
+            echo "## THE LAST SIGNAL — $Q"
+            if [ -n "${RELEASE_URL:-}" ]; then echo "**Download:** [$RELEASE_URL]($RELEASE_URL) → tap the .mp4"; fi
+            echo "Artifacts (bottom of this page): \`THE_LAST_SIGNAL_$Q.mp4\`, \`contact_sheet_$Q.jpg\`"
+            echo '```json'
+            cat "dist/verify_$Q.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

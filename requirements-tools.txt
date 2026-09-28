@@ -1,0 +1,2 @@
+# Only needed to regenerate assets/sky/milkyway_diffuse.jpg (tools/prepare_sky.py)
+OpenEXR==3.5.1
