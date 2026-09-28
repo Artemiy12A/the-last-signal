@@ -102,6 +102,8 @@ jobs:
           cache-dependency-path: requirements.txt
       - name: Install renderer
         run: ./scripts/setup.sh
+      - name: Self-test (timeline continuity, one frame per shot, soundtrack)
+        run: python -m lastsignal selftest
       - uses: actions/download-artifact@v8
         with:
           pattern: segment-*

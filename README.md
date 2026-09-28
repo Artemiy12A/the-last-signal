@@ -59,8 +59,8 @@ Release downloads work for as long as the release exists; artifacts expire after
 | mode | resolution | AA passes | geodesic step | shards | wall time (2-vCPU runners) |
 |---|---|---|---|---|---|
 | `draft` | 960×540 | 1 | 0.07 r | 1 | ~5 min |
-| `preview` | 1280×720 | 2 | 0.05 r | 4 | ~10 min |
-| `final` | 1920×1080 | 4 | 0.035 r | 10 | ~20–30 min |
+| `preview` | 1280×720 | 2 (+ motion blur) | 0.05 r | 4 | ~8 min |
+| `final` | 1920×1080 | 6 (+ motion blur) | 0.035 r | 10 | ~15–25 min |
 
 A final render uses roughly 100–130 runner-minutes of the free 2,000/month quota
 for private repositories. A draft uses about 6.
@@ -138,7 +138,9 @@ python -m lastsignal keyframes --quality preview   # key frames of every shot + 
 python -m lastsignal still --t 12.8 --quality final    # one frame to PNG
 python -m lastsignal audio                         # soundtrack only
 python -m lastsignal sheet  out/final/THE_LAST_SIGNAL_final.mp4   # contact sheet from a video
+python -m lastsignal frames out/final/THE_LAST_SIGNAL_final.mp4 --every 0.5   # PNG frames (or --times 9.5 12.8)
 python -m lastsignal verify out/final/THE_LAST_SIGNAL_final.mp4 --quality final
+python -m lastsignal selftest                      # timeline continuity, a frame per shot, soundtrack
 python -m lastsignal segment --quality final --shard 3 --shards 10   # what each cloud job runs
 python -m lastsignal assemble --quality final --segments segments   # what the final job runs
 ```

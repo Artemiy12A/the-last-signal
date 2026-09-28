@@ -8,7 +8,9 @@ Commands
   still      render one frame to .png
   keyframes  render the key frames of every shot and a contact sheet
   sheet      build a contact sheet from an existing video
+  frames     extract PNG frames from a video (at given times, or every N seconds)
   verify     check an output video (duration, streams, resolution, black/blank frames)
+  selftest   fast sanity checks: timeline continuity, one frame per shot, soundtrack
 """
 from __future__ import annotations
 
@@ -235,6 +237,25 @@ def cmd_sheet(a):
     return 0
 
 
+def cmd_frames(a):
+    from .encode import extract_frame
+    from .timeline import DURATION
+
+    v = Path(a.video)
+    out = Path(a.out) if a.out else v.with_name(v.stem + "_frames")
+    out.mkdir(parents=True, exist_ok=True)
+    if a.times:
+        times = [float(x) for x in a.times]
+    else:
+        n = int(DURATION / a.every)
+        times = [round(i * a.every + a.every / 2, 3) for i in range(n)]
+    for t in times:
+        p = out / f"frame_{t:06.3f}.png"
+        extract_frame(v, t, p, a.width)
+        print(p)
+    return 0
+
+
 def verify(path: Path, quality: str | None = None) -> dict:
     """Sanity checks on a rendered trailer. Raises SystemExit on failure."""
     import subprocess
@@ -298,6 +319,52 @@ def cmd_verify(a):
     return 0
 
 
+def cmd_selftest(a):
+    import numpy as np
+
+    from .timeline import DURATION, PINGS, SHOTS, params_at
+
+    errors = []
+    # 1. the edit is gap-free and exactly DURATION long
+    if SHOTS[0].start != 0.0 or abs(SHOTS[-1].end - DURATION) > 1e-9:
+        errors.append("shots do not span the full duration")
+    for s0, s1 in zip(SHOTS, SHOTS[1:]):
+        if abs(s0.end - s1.start) > 1e-9:
+            errors.append(f"gap/overlap between {s0.name} and {s1.name}")
+    if any(not (0.0 <= t < DURATION) for t, _, _ in PINGS):
+        errors.append("sound event outside the trailer")
+    # 2. one mid-shot frame per shot renders and has the expected brightness
+    q, R = _renderer("draft")
+    for s in SHOTS:
+        t = (s.start + s.end) / 2
+        img = np.frombuffer(_frame(R, q, t, int(t * q.fps)), np.uint8)
+        m = float(img.mean())
+        Pm = params_at(t)
+        black = not Pm.get("scene", True) and Pm.get("text") is None
+        card = not Pm.get("scene", True) and Pm.get("text") is not None
+        ok = (m < 1.0) if black else (m > 0.2) if card else (m > 1.0)
+        print(f"  {s.name:12s} t={t:6.2f}  mean={m:6.2f}  {'ok' if ok else 'FAIL'}")
+        if not ok:
+            errors.append(f"{s.name}: unexpected brightness {m:.2f}")
+    R.release()
+    # 3. soundtrack length
+    import wave
+
+    from .audio import render_soundtrack
+
+    wav = OUT / "audio" / "the_last_signal.wav"
+    render_soundtrack(wav)
+    with wave.open(str(wav)) as w:
+        dur = w.getnframes() / w.getframerate()
+    print(f"  soundtrack {dur:.3f}s")
+    if abs(dur - DURATION) > 1e-3:
+        errors.append(f"soundtrack is {dur}s")
+    if errors:
+        raise SystemExit("selftest FAILED: " + "; ".join(errors))
+    print("selftest passed")
+    return 0
+
+
 def cmd_shards(a):
     from .gl import QUALITIES
 
@@ -325,8 +392,12 @@ def main(argv=None) -> int:
     p = sub.add_parser("keyframes"); p.add_argument("--quality", **qual); p.add_argument("--cols", type=int, default=4)
     p.add_argument("--only", nargs="*", help="time windows a:b"); p.set_defaults(fn=cmd_keyframes)
     p = sub.add_parser("sheet"); p.add_argument("video"); p.add_argument("--out"); p.set_defaults(fn=cmd_sheet)
+    p = sub.add_parser("frames"); p.add_argument("video"); p.add_argument("--times", nargs="*")
+    p.add_argument("--every", type=float, default=1.0); p.add_argument("--width", type=int)
+    p.add_argument("--out"); p.set_defaults(fn=cmd_frames)
     p = sub.add_parser("verify"); p.add_argument("video"); p.add_argument("--quality", choices=["draft", "preview", "final"])
     p.set_defaults(fn=cmd_verify)
+    p = sub.add_parser("selftest"); p.set_defaults(fn=cmd_selftest)
     p = sub.add_parser("shards"); p.add_argument("--quality", **qual); p.add_argument("--shards", type=int, default=8)
     p.set_defaults(fn=cmd_shards)
     a = ap.parse_args(argv)

@@ -56,7 +56,7 @@ class Quality:
 QUALITIES = {
     "draft": Quality("draft", 960, 540, 24, 1, 0.07, 320, 20, "veryfast"),
     "preview": Quality("preview", 1280, 720, 24, 2, 0.05, 420, 18, "medium"),
-    "final": Quality("final", 1920, 1080, 24, 4, 0.035, 600, 14, "slow"),
+    "final": Quality("final", 1920, 1080, 24, 6, 0.035, 600, 14, "slow"),
 }
 
 # Jitter patterns (pixel offsets), rotated grid for 4 samples.

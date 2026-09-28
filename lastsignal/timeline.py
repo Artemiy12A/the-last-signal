@@ -345,7 +345,9 @@ def s_title(P, t, u):
     P["text_glow"] = 0.45 + 0.8 * pulse
     P["text_track"] = lerp(0.52, 0.60, ease_out_cubic(u))
     P["text_sweep"] = lerp(-0.15, 1.2, clamp((t - 18.45) / 1.1)) if 18.45 <= t <= 19.55 else -1.0
-    P["text_flicker"] = 0.85 if FINAL_PING <= t < FINAL_PING + 0.09 else 0.0
+    # the letters drop out for a frame as the last signal fires, then catch again
+    d = t - FINAL_PING
+    P["text_flicker"] = 0.9 if -0.02 <= d < 0.02 else 0.45 if 0.02 <= d < 0.065 else 0.0
     P["fade"] = 1.0 - smoothstep(19.45, 19.96, t)
 
 

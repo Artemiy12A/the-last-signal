@@ -122,7 +122,7 @@ void main() {
             float dx = tuv.x - uTextSweep + (tuv.y - 0.5) * 0.25;
             sweep = exp(-dx * dx / 0.0025);
         }
-        float flick = 1.0 - uTextFlicker * step(0.5, hash12(vec2(floor(uFrame), 3.0)));
+        float flick = 1.0 - uTextFlicker;
         float a = ta * uTextOpacity * flick;
         vec3 tc = uTextColor * (1.0 + sweep * 0.9);
         c = mix(c, tc, a);
