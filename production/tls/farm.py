@@ -109,7 +109,7 @@ def shard(q: str, frames_spec: str, out: Path, deadline_min: float = 330.0, ever
     fdir.mkdir(parents=True, exist_ok=True)
     done = []
     for f in frames:
-        png = fdir / f"f{f:05d}.png"
+        png = fdir / f"f{f:05d}.ppm"
         if not png.exists():
             if (time.time() - t_start) / 60 > deadline_min:
                 print(f"deadline reached before frame {f}", flush=True)
@@ -125,8 +125,8 @@ def shard(q: str, frames_spec: str, out: Path, deadline_min: float = 330.0, ever
         lst = out / f"list_{a:05d}.txt"
         body = ""
         for f in range(a, b + 1, every):
-            body += f"file '{fdir / f'f{f:05d}.png'}'\nduration {min(every, last - f + 1) / edl.FPS:.6f}\n"
-        body += f"file '{fdir / f'f{b:05d}.png'}'\n"   # concat demuxer quirk: repeat last entry
+            body += f"file '{fdir / f'f{f:05d}.ppm'}'\nduration {min(every, last - f + 1) / edl.FPS:.6f}\n"
+        body += f"file '{fdir / f'f{b:05d}.ppm'}'\n"   # concat demuxer quirk: repeat last entry
         lst.write_text(body)
         ffmpeg("-f", "concat", "-safe", "0", "-i", lst, "-vf", f"fps={edl.FPS}", "-frames:v", last - a + 1,
                "-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuv444p10le", "-vendor", "apl0", seg)
@@ -136,6 +136,7 @@ def shard(q: str, frames_spec: str, out: Path, deadline_min: float = 330.0, ever
 
 def assemble(q: str, segdir: Path, out: Path, audio: Path | None, title: str):
     out.mkdir(parents=True, exist_ok=True)
+    segdir.mkdir(parents=True, exist_ok=True)
     segs = sorted(segdir.rglob("seg_*.mov"))
     have = set()
     for s in segs:

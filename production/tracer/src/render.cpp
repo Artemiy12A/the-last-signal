@@ -95,6 +95,7 @@ struct Tetrad {
 
 static double g_a = 0.9;
 static bool g_debug = false;
+static std::atomic<long> g_steps{0}, g_evals{0}, g_rays{0};
 
 // Static observer (Killing time) at pos, boosted by velocity vel; spatial legs aligned as closely
 // as possible with the requested Euclidean camera axes.
@@ -154,6 +155,39 @@ static Tetrad make_tetrad(const CamPose& cp) {
     return T;
 }
 
+// ---------------------------------------------------------------- relativistic beacon
+// An emitter (the ship's strobe) moving on a precomputed timelike worldline. Rays pick it up at
+// the coordinate time they pass it (light-travel delays, multiple lensed images and echoes come
+// out naturally); its colour and brightness follow the redshift g = 1 / (k . u_beacon).
+struct Beacon {
+    bool on = false;
+    std::vector<double> t, x, y, z, ut, ux, uy, uz, tau;   // table in coordinate time (ascending)
+    double t_cam = 0, t_span = 0;                         // camera coordinate time, shutter span
+    double sigma = 0.05, intensity = 1.0, T_emit = 9000, p_g = 4.0, decay = 0.05, steady = 0.0;
+    std::vector<std::pair<double, double>> pulses;        // (tau_start, duration) proper time
+    bool at(double tq, double pos[3], double u[4], double& tq_tau) const {
+        if (!on || t.size() < 2 || tq < t.front() || tq > t.back()) return false;
+        size_t i = std::upper_bound(t.begin(), t.end(), tq) - t.begin();
+        i = std::clamp<size_t>(i, 1, t.size() - 1);
+        double f = (tq - t[i - 1]) / std::max(t[i] - t[i - 1], 1e-12);
+        auto L = [&](const std::vector<double>& v) { return v[i - 1] * (1 - f) + v[i] * f; };
+        pos[0] = L(x); pos[1] = L(y); pos[2] = L(z);
+        u[0] = L(ut); u[1] = L(ux); u[2] = L(uy); u[3] = L(uz);
+        tq_tau = L(tau);
+        return true;
+    }
+    double envelope(double ta) const {
+        double v = steady;
+        for (auto& p : pulses) {
+            double d = ta - p.first;
+            if (d < 0) continue;
+            double e = d < p.second ? 1.0 : std::exp(-(d - p.second) / decay);
+            v = std::max(v, e);
+        }
+        return v;
+    }
+};
+
 // ---------------------------------------------------------------- scene
 struct Scene {
     int W = 640, H = 268;
@@ -165,7 +199,7 @@ struct Scene {
     double hfac = 0.12, far_boost = 100.0, escape_r = 3000.0;
     bool light_delay = true;
     double pixel_sigma = 0.45;
-    double ds_scale = 2.0;
+    double ds_scale = 3.0;
     int spp_min = 4;
     double var_thresh = 0.02;
     DiskParams disk;
@@ -176,6 +210,7 @@ struct Scene {
     double sky_doppler = 1.0;
     std::string out = "out.exr";
     int crop[4] = {0, 0, -1, -1};
+    Beacon beacon;
     int threads = 0;
     uint32_t seed = 1;
     double white_K = 6500;
@@ -247,12 +282,13 @@ struct TraceResult {
     bool touched = false;  // entered the dense disk slab
     bool hazed = false;    // passed through the haze region
     double rmin = 1e30;
-    RGB disk, haze;
+    RGB disk, haze, beacon;
     float T = 1.f;         // transmittance through the gas
 };
 
 struct Tracer {
     const Scene* S;
+    const BlackbodyLUT* bb = nullptr;
     const DiskModel* D;
     double rp, rcap;
 
@@ -264,7 +300,9 @@ struct Tracer {
         double r = ks_radius(ph.x[0], ph.x[1], ph.x[2], a);
         double rprev = r + 1;
         double Rext = S->disk_on ? D->r_extent() : -1;
+        struct Cnt { long n = 0; ~Cnt() { g_steps += n; g_rays += 1; } } cnt;
         for (int n = 0; n < 20000; ++n) {
+            cnt.n = n;
             R.rmin = std::min(R.rmin, r);
             if (g_debug && (n % 10 == 0)) std::fprintf(stderr, "  n=%d r=%.4f x=(%.3f %.3f %.3f) k=(%.3f %.3f %.3f) kt=%.4f\n", n, r, ph.x[0], ph.x[1], ph.x[2], ph.k[0], ph.k[1], ph.k[2], kt);
             if (r < rp * 1.01 || (r < rcap && r < rprev)) { R.escaped = false; R.T = shade ? R.T : R.T; return; }
@@ -313,17 +351,62 @@ struct Tracer {
                 bool inside = std::fabs(p0.x[2]) < zmax0 || std::fabs(ph.x[2]) < zmax1 || cross;
                 if (inside) {
                     R.hazed = true;
-                    if (D->in_slab(r, p0.x[2]) || D->in_slab(r1, ph.x[2]) || (cross && std::min(r, r1) < D->P.r_out * 1.25))
-                        R.touched = true;
-                    if (shade && R.T > 1e-3f) march(p0, d0, ph, d1, h, kt, time, pix_angle, path, chord, rng, R);
+                    bool slab = D->in_slab(r, p0.x[2]) || D->in_slab(r1, ph.x[2]) || (cross && std::min(r, r1) < D->P.r_out * 1.25);
+                    if (slab) R.touched = true;
+                    if (shade && R.T > 1e-3f) {
+                        if (slab) march(p0, d0, ph, d1, h, kt, time, pix_angle, path, chord, rng, R);
+                        else haze_segment(p0, ph, kt, time, chord, rng, R);
+                    }
                 }
             }
+            if (shade && S->beacon.on) beacon_segment(p0, ph, kt, time, R);
             path += chord;
             d0 = d1;
             rprev = r;
             r = r1;
         }
         R.escaped = false;
+    }
+
+    void beacon_segment(const Photon& p0, const Photon& p1, double kt, double time, TraceResult& R) const {
+        const Beacon& B = S->beacon;
+        // `time` carries the sample's shutter offset relative to the disk clock; map it onto the
+        // beacon's clock through the shutter span
+        double tshift = (S->shutter_dt > 0) ? (time - S->time) / S->shutter_dt * B.t_span : 0.0;
+        double tq = B.t_cam + tshift + 0.5 * (p0.t + p1.t);
+        double bp[3], bu[4], btau;
+        if (!B.at(tq, bp, bu, btau)) return;
+        double d[3] = {p1.x[0] - p0.x[0], p1.x[1] - p0.x[1], p1.x[2] - p0.x[2]};
+        double w[3] = {bp[0] - p0.x[0], bp[1] - p0.x[1], bp[2] - p0.x[2]};
+        double dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+        double sp = std::clamp((w[0] * d[0] + w[1] * d[1] + w[2] * d[2]) / std::max(dd, 1e-30), 0.0, 1.0);
+        double c[3] = {p0.x[0] + sp * d[0] - bp[0], p0.x[1] + sp * d[1] - bp[1], p0.x[2] + sp * d[2] - bp[2]};
+        double r2 = c[0] * c[0] + c[1] * c[1] + c[2] * c[2];
+        if (r2 > 36.0 * B.sigma * B.sigma) return;
+        double env = B.envelope(btau);
+        if (env <= 0) return;
+        double k[3] = {p0.k[0] * (1 - sp) + p1.k[0] * sp, p0.k[1] * (1 - sp) + p1.k[1] * sp, p0.k[2] * (1 - sp) + p1.k[2] * sp};
+        double kdu = kt * bu[0] + k[0] * bu[1] + k[1] * bu[2] + k[2] * bu[3];
+        double g = std::clamp(1.0 / std::max(kdu, 1e-9), 1e-4, 50.0);
+        double I = B.intensity * env * std::pow(g, B.p_g) * std::exp(-0.5 * r2 / (B.sigma * B.sigma));
+        R.beacon += (*bb)(B.T_emit * g) * float(I * R.T);
+    }
+
+    // Outside the dense slab only the smooth haze remains: one jittered sample per segment.
+    void haze_segment(const Photon& p0, const Photon& p1, double kt, double time, double chord, Rng* rng,
+                      TraceResult& R) const {
+        double s = rng ? rng->uni() : 0.5;
+        double x[3], k[3];
+        for (int i = 0; i < 3; ++i) { x[i] = p0.x[i] * (1 - s) + p1.x[i] * s; k[i] = p0.k[i] * (1 - s) + p1.k[i] * s; }
+        double tm = time + (S->light_delay ? (p0.t * (1 - s) + p1.t * s) : 0.0);
+        DiskModel::Sample smp;
+        D->eval(x[0], x[1], x[2], kt, k, tm, 1.0, smp);
+        R.haze += smp.emit_haze * (R.T * float(chord));
+        if (smp.alpha > 0) {
+            float att = std::exp(-smp.alpha * float(chord));
+            R.disk += smp.emit_disk * (R.T * (1 - att) / smp.alpha);
+            R.T *= att;
+        }
     }
 
     // Emission/absorption along one RK segment, Hermite-interpolated.
@@ -355,6 +438,7 @@ struct Tracer {
             double tm = time;
             if (S->light_delay) tm += (p0.t * (1 - s) + p1.t * s);
             DiskModel::Sample smp;
+            g_evals.fetch_add(1, std::memory_order_relaxed);
             Dm.eval(x[0], x[1], x[2], kt, k, tm, foot, smp);
             if (smp.alpha > 0 || smp.emit_haze.lum() > 0) {
                 float tau = smp.alpha * float(ds);
@@ -387,7 +471,7 @@ int main(int argc, char** argv) {
     S.escape_r = J.value("escape_r", 3000.0);
     S.light_delay = J.value("light_delay", true);
     S.pixel_sigma = J.value("pixel_sigma", 0.45);
-    S.ds_scale = J.value("ds_scale", 2.0);
+    S.ds_scale = J.value("ds_scale", 3.0);
     S.spp_min = J.value("spp_min", 4);
     S.var_thresh = J.value("var_thresh", 0.02);
     S.out = J.value("out", std::string("out.exr"));
@@ -454,7 +538,7 @@ int main(int argc, char** argv) {
         Photon ph; double kt;
         Vec3 n = local_dir(S, atof(argv[3]), atof(argv[4]));
         launch(S, T, cp, n, ph, kt);
-        Tracer TR0; TR0.S = &S; TR0.D = &D; TR0.rp = horizon_radius(g_a); TR0.rcap = photon_orbit_prograde(g_a);
+        Tracer TR0; TR0.S = &S; TR0.D = &D; TR0.bb = &bb; TR0.rp = horizon_radius(g_a); TR0.rcap = photon_orbit_prograde(g_a);
         TraceResult R;
         TR0.trace(ph, kt, false, 0, 1e-3, nullptr, R);
         std::fprintf(stderr, "escaped %d dir (%.3f %.3f %.3f) touched %d rmin %.3f\n", R.escaped, R.dir.x, R.dir.y, R.dir.z, R.touched, R.rmin);
@@ -462,8 +546,25 @@ int main(int argc, char** argv) {
     }
     auto t0 = std::chrono::steady_clock::now();
 
+    if (J.contains("beacon")) {
+        const json& b = J["beacon"];
+        Beacon& B = S.beacon;
+        B.on = b.value("on", true);
+        const json& tb = b["table"];   // rows: [t, x, y, z, ut, ux, uy, uz, tau]
+        for (const auto& row : tb) {
+            B.t.push_back(row[0]); B.x.push_back(row[1]); B.y.push_back(row[2]); B.z.push_back(row[3]);
+            B.ut.push_back(row[4]); B.ux.push_back(row[5]); B.uy.push_back(row[6]); B.uz.push_back(row[7]);
+            B.tau.push_back(row[8]);
+        }
+        B.t_cam = b.value("t_cam", 0.0); B.t_span = b.value("t_span", 0.0);
+        B.sigma = b.value("sigma", 0.05); B.intensity = b.value("intensity", 1.0);
+        B.T_emit = b.value("T", 9000.0); B.p_g = b.value("p_g", 4.0); B.decay = b.value("decay", 0.05);
+        B.steady = b.value("steady", 0.0);
+        if (b.contains("pulses")) for (const auto& p : b["pulses"]) B.pulses.push_back({p[0].get<double>(), p[1].get<double>()});
+    }
+
     Tracer TR;
-    TR.S = &S; TR.D = &D;
+    TR.S = &S; TR.D = &D; TR.bb = &bb;
     TR.rp = horizon_radius(g_a);
     TR.rcap = photon_orbit_prograde(g_a);
 
@@ -474,6 +575,7 @@ int main(int argc, char** argv) {
 
     std::vector<RGB> L_disk(size_t(CW) * CH), L_haze(size_t(CW) * CH), L_sky(size_t(CW) * CH), L_star(size_t(CW) * CH);
     std::vector<float> L_A(size_t(CW) * CH, 0.f), L_hole(size_t(CW) * CH, 0.f);
+    std::vector<RGB> L_beacon(size_t(CW) * CH);
 
     // ---------------- pass A: corner grid (geometry only), per star time sample
     const int GW = CW + 1, GH = CH + 1;
@@ -481,7 +583,14 @@ int main(int argc, char** argv) {
     std::vector<RGB> skyA(size_t(CW) * CH);
     std::vector<float> escA(size_t(CW) * CH, 0.f);
     std::vector<double> fpA(size_t(CW) * CH, pix_angle);
-    int NT = std::max(1, S.star_times);
+    int NT = S.star_times;
+    if (NT <= 0) {
+        // automatic: enough shutter samples that a star moves < ~1.5 px between them
+        double ang = std::acos(std::clamp(S.cam0.fwd.dot(S.cam1.fwd), -1.0, 1.0));
+        double roll = std::acos(std::clamp(S.cam0.up.dot(S.cam1.up), -1.0, 1.0));
+        double mv = (ang + roll * 0.5) / pix_angle;
+        NT = std::clamp(int(std::ceil(mv / 1.5)), 1, 6);
+    }
     for (int ti = 0; ti < NT; ++ti) {
         double u = NT == 1 ? 0.5 : (ti + 0.5) / NT;
         CamPose cp = pose_at(S, u);
@@ -578,7 +687,7 @@ int main(int argc, char** argv) {
             }
             Rng rng(uint64_t(S.seed) * 0x9E3779B97F4A7C15ULL + uint64_t(Y0 + j) * 100003ULL + uint64_t(X0 + i));
             int N = needs_ss[pi] == 2 ? S.spp : S.spp_haze;
-            RGB sd, sh, ss;
+            RGB sd, sh, ss, sb;
             float sT = 0, shole = 0;
             int sq = std::max(1, int(std::sqrt(double(N))));
             double lsum = 0, l2sum = 0;
@@ -602,7 +711,7 @@ int main(int argc, char** argv) {
                 TraceResult R;
                 double tm = S.time + (tu - 0.5) * S.shutter_dt;
                 TR.trace(ph, kt, true, tm, pix_angle, &rng, R);
-                sd += R.disk; sh += R.haze;
+                sd += R.disk; sh += R.haze; sb += R.beacon;
                 RGB skyc;
                 if (R.escaped) {
                     Vec3 g = S.sky_rot * R.dir;
@@ -621,6 +730,7 @@ int main(int argc, char** argv) {
             nss += N;
             float inv = 1.f / N;
             L_disk[pi] = sd * inv;
+            L_beacon[pi] = sb * inv;
             L_haze[pi] = sh * inv;
             L_sky[pi] = ss * inv;
             float Tinf = sT * inv;
@@ -643,6 +753,7 @@ int main(int argc, char** argv) {
         chs.push_back(std::move(b)); chs.push_back(std::move(g)); chs.push_back(std::move(r));
     };
     add_rgb("disk", L_disk); add_rgb("haze", L_haze); add_rgb("sky", L_sky); add_rgb("stars", L_star);
+    if (S.beacon.on) add_rgb("beacon", L_beacon);
     chs.push_back({"A", L_A});
     chs.push_back({"hole", L_hole});
     if (J.value("output", std::string("layers")) == "beauty") {
@@ -681,6 +792,8 @@ int main(int argc, char** argv) {
         return 2;
     }
     long npx = long(CW) * CH;
+    std::fprintf(stderr, "stats: rays %ld  steps/ray %.1f  evals/ray %.1f\n", long(g_rays), double(g_steps) / std::max(1L, long(g_rays)),
+                 double(g_evals) / std::max(1L, long(g_rays)));
     std::fprintf(stderr, "tracer: %dx%d  %.2fs  (%ld supersampled rays, %.1f%% px supersampled)  -> %s\n", CW, CH, secs,
                  long(nss), 100.0 * std::count(needs_ss.begin(), needs_ss.end(), 2) / std::max(npx, 1L), S.out.c_str());
     return 0;

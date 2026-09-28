@@ -214,16 +214,16 @@ public:
             py -= std::floor(py);
             float fy = float(py * P.n_phi);
             float fx = float(lr * P.k_ln);
-            float w1 = fbm_py(fx * 0.5f + 3.1f, fy * 0.5f, fz * 0.5f, P.n_phi / 2, 2, fp * 0.5f, sd ^ 0xA5A5u);
-            float w2 = fbm_py(fx * 0.5f + 8.7f, fy * 0.5f, fz * 0.5f + 4.2f, P.n_phi / 2, 2, fp * 0.5f, sd ^ 0x5A5Au);
+            float w1 = fbm_py(fx * 0.5f + 3.1f, fy * 0.5f, fz * 0.5f, P.n_phi / 2, 1, fp * 0.5f, sd ^ 0xA5A5u);
+            float w2 = fbm_py(fx * 0.5f + 8.7f, fy * 0.5f, fz * 0.5f + 4.2f, P.n_phi / 2, 1, fp * 0.5f, sd ^ 0x5A5Au);
             float wx = fx + float(P.warp) * 2.f * w1, wy = fy + float(P.warp) * 1.f * w2;
             float n = fbm_py(wx, wy, fz, P.n_phi, P.octaves, fp, sd);
             int32_t pf = std::max(1, int32_t(P.n_phi * P.fil_scale + 0.5));  // integer period: no seam
             float ys = float(pf) / float(P.n_phi);
-            float rf = ridged_py(wx * float(P.fil_scale) + 5.3f, wy * ys, fz * 0.7f, pf, P.octaves,
+            float rf = ridged_py(wx * float(P.fil_scale) + 5.3f, wy * ys, fz * 0.7f, pf, std::max(1, P.octaves - 1),
                                  fp * float(P.fil_scale), sd ^ 0xF11Au, float(P.fil_sharp));
-            float n2 = fbm_py(wx * 2.f + 17.f, wy * 2.f, fz * 2.f + 5.f, P.n_phi * 2, 3, fp * 2.f, sd ^ 0x1234u);
-            float hs = fbm_py(wx * 1.5f + 40.f, wy * 1.5f, fz, (P.n_phi * 3) / 2, 2, fp * 1.5f, sd ^ 0x7777u);
+            float n2 = fbm_py(wx * 2.f + 17.f, wy * 2.f, fz * 2.f + 5.f, P.n_phi * 2, 2, fp * 2.f, sd ^ 0x1234u);
+            float hs = fbm_py(wx * 1.5f + 40.f, wy * 1.5f, fz, (P.n_phi * 3) / 2, 1, fp * 1.5f, sd ^ 0x7777u);
             // lanes: thin ridged features along the flow (cold, absorbing)
             float ln = fbm_py(fx * 2.5f + 91.f, fy * 0.5f, fz, P.n_phi / 2, 2, fp * 2.5f, sd ^ 0x3C3Cu);
             float rid = 1.f - std::fabs(ln) * 4.f;

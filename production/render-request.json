@@ -5,5 +5,6 @@
   "every": 12,
   "jobs": 2,
   "publish": "none",
-  "tag": ""
+  "tag": "",
+  "attempt": 2
 }

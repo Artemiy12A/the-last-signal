@@ -123,6 +123,19 @@ def read_exr_layers(path: Path) -> dict:
     return out
 
 
+def save_image(path: Path, img: np.ndarray) -> Path:
+    """8-bit -> PNG; 16-bit -> binary PPM (P6, maxval 65535, big-endian), which ffmpeg reads natively."""
+    if img.dtype == np.uint16:
+        path = path.with_suffix(".ppm")
+        H, W = img.shape[:2]
+        with open(path, "wb") as f:
+            f.write(f"P6\n{W} {H}\n65535\n".encode())
+            f.write(img.astype(">u2").tobytes())
+    else:
+        Image.fromarray(img).save(path)
+    return path
+
+
 def render_frame(shot_id: str, frame: int, q: str, png16: bool = False, keep_exr: bool = True,
                  outdir: Path | None = None) -> Path:
     t0 = time.time()
@@ -141,8 +154,7 @@ def render_frame(shot_id: str, frame: int, q: str, png16: bool = False, keep_exr
             from comp.titles import draw_title
             enc = draw_title(enc, **P.title) * P.fade
         img = to_rgb16(enc) if png16 else to_rgb8(enc)
-        Image.fromarray(img).save(png)
-        return png
+        return save_image(png, img)
     layers = {}
     if spec.tracer is not None:
         sc = tracer_scene(spec, q, exrdir / f"t{frame:05d}.exr")
@@ -160,7 +172,7 @@ def render_frame(shot_id: str, frame: int, q: str, png16: bool = False, keep_exr
     P.grain_size = max(0.5, P.grain_size * s)
     enc = composite(layers, P, spec.t)
     img = to_rgb16(enc) if png16 else to_rgb8(enc)
-    Image.fromarray(img).save(png)
+    png = save_image(png, img)
     if not keep_exr:
         for p in exrdir.glob(f"*{frame:05d}*"):
             p.unlink()
