@@ -79,7 +79,7 @@ void main() {
         float n = hash12(vec2(band, floor(uFrame)));
         float on = step(1.0 - 0.35 * uGlitch, n);
         uv.x += on * (hash12(vec2(band, uFrame + 7.0)) - 0.5) * 0.08 * uGlitch;
-        split = uGlitch * (0.004 + 0.01 * on);
+        split = uGlitch * (0.0012 + 0.012 * on);
     }
 
     vec3 hdr;
@@ -92,7 +92,7 @@ void main() {
     vec3 streak = texture(uStreak, uv).rgb;
     hdr += bloom * uBloomGain;
     hdr += streak * uStreakTint * uStreakGain;
-    hdr += vec3(uFlash);
+    hdr += vec3(1.0, 0.9, 0.76) * uFlash;
 
     // vignette (before tone mapping so highlights roll off naturally)
     vec2 vc = (uv - 0.5) * vec2(uOutRes.x / uActiveH, 1.0);

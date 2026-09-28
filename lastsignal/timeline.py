@@ -96,7 +96,7 @@ def base_params() -> dict:
         streak_threshold=2.5, streak_gain=0.08, streak_tint=v3(0.45, 0.65, 1.0),
         ca=0.025, vignette=0.45, grain=0.018, fade=1.0, flash=0.0, glitch=0.0,
         exposure=0.55, saturation=1.0, contrast=1.08,
-        lift=v3(0.0, 0.003, 0.006), gain=v3(1.0, 0.99, 0.97),
+        lift=v3(0.0, 0.0006, 0.0014), gain=v3(1.0, 0.99, 0.97),
         text=None, text_opacity=0.0, text_color=v3(0.93, 0.90, 0.85), text_glow=0.0,
         text_sweep=-1.0, text_flicker=0.0,
     )
@@ -195,6 +195,7 @@ def card(text: str, t0: float, t1: float):
         P["text_glow"] = 0.6
         P["text_track"] = lerp(0.40, 0.46, (t - t0) / (t1 - t0))
         P["grain"] = 0.02
+        P["lift"] = v3(0.0, 0.0, 0.0)
     return fn
 
 
@@ -318,27 +319,30 @@ def s5b_probe(P, t, u):
     P["glitch"] = 0.35 + 0.55 * e + ping_glitch(t) * 0.5
 
 
-# TITLE - silence, then the name, inside the last light
+# TITLE - silence, then the name, over the faint silhouette of the hole
 def s_title(P, t, u):
-    cam = orbit(64.0, 0.0, 78.0)
-    cr = look_at(cam, v3(0, 0, 0), up=(0, 0, 1), roll=math.radians(180.0 + lerp(0.0, 2.0, u)))
+    e = ease_in_out(u)
+    cam = orbit(lerp(46.0, 44.0, e), lerp(-2.0, 2.0, e), 1.6)
+    cr = look_at(cam, v3(0, 0.05, 0), roll=0.0)
     P["cam_pos"] = cam
     P["cam_rot"] = cr
-    P["fov"] = lerp(19.0, 18.2, ease_in_out(u))
-    glow = smoothstep(18.3, 19.5, t)
-    pulse = math.exp(-max(t - FINAL_PING, 0.0) / 0.3) if t >= FINAL_PING else 0.0
-    P["disk_gain"] = 0.004 + 0.006 * glow + 0.02 * pulse
-    P["ring_boost"] = 45.0
-    P["disk_temp"] = 4200.0
-    P["doppler"] = 0.3
+    P["fov"] = 21.0
+    glow = smoothstep(18.25, 19.3, t)
+    pulse = math.exp(-max(t - FINAL_PING, 0.0) / 0.35) if t >= FINAL_PING else 0.0
+    P["disk_gain"] = 0.05 * glow + 0.14 * pulse
+    P["ring_boost"] = 2.5
+    P["disk_temp"] = 4300.0
+    P["doppler"] = 0.6
     P["glow"] = 0.0
-    P["star_gain"] = 0.25 * glow
-    P["sky_gain"] = 0.6 * glow
+    P["disk_time"] = 40.0 + t * 2.6
+    P["star_gain"] = 0.35 * glow
+    P["sky_gain"] = 1.2 * glow
     P["exposure"] = 0.6
     P["vignette"] = 0.6
+    P["bloom_gain"] = 0.09
     P["text"] = ("title", "THE LAST SIGNAL")
     P["text_opacity"] = smoothstep(18.22, 18.95, t)
-    P["text_glow"] = 0.5 + 0.9 * pulse
+    P["text_glow"] = 0.45 + 0.8 * pulse
     P["text_track"] = lerp(0.52, 0.60, ease_out_cubic(u))
     P["text_sweep"] = lerp(-0.15, 1.2, clamp((t - 18.45) / 1.1)) if 18.45 <= t <= 19.55 else -1.0
     P["text_flicker"] = 0.85 if FINAL_PING <= t < FINAL_PING + 0.09 else 0.0

@@ -31,11 +31,28 @@ def _renderer(quality: str):
     return q, Renderer(q)
 
 
+SHUTTER = 0.5  # 180-degree shutter
+
+
 def _frame(R, q, t: float, frame: int) -> bytes:
+    """One output frame. Each anti-aliasing pass also samples a different instant
+    inside the shutter interval, which gives real motion blur. Sub-frame times are
+    clamped to the current shot so blur never bleeds across a cut."""
+    from .gl import JITTER
     from .text import text_layer
-    from .timeline import params_at
+    from .timeline import params_at, shot_at
 
     P = params_at(t, frame)
+    n = len(JITTER[q.samples])
+    if n > 1 and P.get("scene", True):
+        shot = shot_at(t)
+        span = SHUTTER / q.fps
+        passes = []
+        for i in range(n):
+            ti = t + ((i + 0.5) / n - 0.5) * span
+            ti = min(max(ti, shot.start), shot.end - 1e-4)
+            passes.append(params_at(ti, frame))
+        P["passes"] = passes
     img, key = text_layer(P, q.out_w, q.out_h)
     return R.render(P, img, key)
 

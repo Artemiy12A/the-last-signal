@@ -11,7 +11,7 @@ FONTS = Path(__file__).resolve().parents[1] / "assets" / "fonts"
 
 STYLES = {
     # kind: (font file, weight, size as fraction of frame height)
-    "card": ("Jost-Variable.ttf", 330, 0.029),
+    "card": ("Jost-Variable.ttf", 340, 0.032),
     "title": ("Jost-Variable.ttf", 400, 0.056),
 }
 SUPERSAMPLE = 3

@@ -168,25 +168,16 @@ class Renderer:
         self.text.build_mipmaps()
         self._text_key = key
 
-    # ------------------------------------------------------------------ frame
-    def render(self, P: dict, text_img: np.ndarray | None = None, text_key=None) -> bytes:
-        mgl = self.mgl
-        ctx = self.ctx
+    def _scene_uniforms(self, P: dict, n_passes: int) -> dict:
         q = self.q
-
-        # ---------------- scene: jittered passes accumulated additively
-        cam_rot = P["cam_rot"]
         tan_half = float(np.tan(np.radians(P["fov"]) * 0.5))
-        pix_ang = 2.0 * tan_half / self.ah
-        jit = JITTER[q.samples]
-        self.sky.use(0)
-        self.bb.use(1)
-        common = {
+        vec = lambda k: tuple(float(x) for x in P[k])  # noqa: E731
+        return {
             "uRes": (float(self.aw), float(self.ah)),
-            "uCamPos": tuple(P["cam_pos"]),
-            "uCamRot": _mat3(cam_rot),
+            "uCamPos": vec("cam_pos"),
+            "uCamRot": _mat3(P["cam_rot"]),
             "uTanHalfFovY": tan_half,
-            "uPixelAngle": pix_ang,
+            "uPixelAngle": 2.0 * tan_half / self.ah,
             "uTime": P["t"],
             "uBH": P["bh"],
             "uStepK": q.step_k,
@@ -208,24 +199,38 @@ class Renderer:
             "uSkyGain": P["sky_gain"],
             "uStarGain": P["star_gain"],
             "uShip": P["ship"],
-            "uShipPos": tuple(P["ship_pos"]),
+            "uShipPos": vec("ship_pos"),
             "uShipRot": _mat3(P["ship_rot"]),
             "uShipScale": P["ship_scale"],
-            "uKeyDir": tuple(P["key_dir"]),
-            "uKeyCol": tuple(P["key_col"]),
-            "uFillCol": tuple(P["fill_col"]),
-            "uRimCol": tuple(P["rim_col"]),
+            "uKeyDir": vec("key_dir"),
+            "uKeyCol": vec("key_col"),
+            "uFillCol": vec("fill_col"),
+            "uRimCol": vec("rim_col"),
             "uBeacon": P["beacon"],
             "uEngine": P["engine"],
-            "uWeight": 1.0 / len(jit),
+            "uWeight": 1.0 / n_passes,
         }
+
+    # ------------------------------------------------------------------ frame
+    def render(self, P: dict, text_img: np.ndarray | None = None, text_key=None) -> bytes:
+        mgl = self.mgl
+        ctx = self.ctx
+        q = self.q
+
+        # ---------------- scene: jittered passes accumulated additively.
+        # Each pass may carry its own parameters (sub-frame time -> motion blur).
+        jit = JITTER[q.samples]
+        passes = P.get("passes") or [P]
+        self.sky.use(0)
+        self.bb.use(1)
         self.fbo_accum.use()
         self.fbo_accum.clear(0.0, 0.0, 0.0, 0.0)
         if P.get("scene", True):
-            self._set(self.p_scene, common)
             ctx.enable(mgl.BLEND)
             ctx.blend_func = (mgl.ONE, mgl.ONE)
             for i, (jx, jy) in enumerate(jit):
+                Pi = passes[i % len(passes)]
+                self._set(self.p_scene, self._scene_uniforms(Pi, len(jit)))
                 self._set(self.p_scene, {"uJitter": (jx, jy), "uPass": float(i)})
                 self.vaos[self.p_scene].render(mgl.TRIANGLES)
             ctx.disable(mgl.BLEND)
