@@ -1,0 +1,8 @@
+{
+  "source": "https://svs.gsfc.nasa.gov/vis/a000000/a004800/a004851/starmap_2020_8k_gal.exr",
+  "credit": "NASA/Goddard Space Flight Center Scientific Visualization Studio, Deep Star Maps 2020",
+  "encoding": "linear = (value ** 2.4) * scale",
+  "gamma": 2.4,
+  "scale": 0.05561313405632973,
+  "median_linear": 9.82852652668953e-05
+}
