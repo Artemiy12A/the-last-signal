@@ -12,7 +12,7 @@ SHOT = edl.SHOT_BY_ID["S07"]
 T0, T1 = SHOT.start, SHOT.end
 
 # aim point slides along the upper-left limb of the shadow (lensed far side of the disk)
-aim = Track([(T0, v3(-5.8, 0.0, 3.2)), (T1, v3(-4.9, 0.0, 4.6))])
+aim = Track([(T0, v3(-3.7, 0.0, 1.7)), (T1, v3(-3.1, 0.0, 2.7))])   # mostly shadow: the edge rims one side
 
 
 def cam_at(t: float) -> Cam:
@@ -23,6 +23,7 @@ def cam_at(t: float) -> Cam:
 
 
 def params(t: float, q: str) -> dict:
-    P = CompParams(exposure=-1.2, gains={"sky": 0.3, "stars": 0.6}, bloom=0.03, glare=0.01, streak=0.04,
-                   halation=0.07, vignette=0.35, punch=0.3, look_sat=1.3, saturation=1.1, white=(1.0, 0.95, 0.88))
+    # only the brightest gas at the inner edge survives: a razor arc on black, not the disk's surface
+    P = CompParams(exposure=-2.0, gains={"sky": 0.3, "stars": 0.6}, bloom=0.03, glare=0.01, streak=0.04,
+                   halation=0.07, vignette=0.35, punch=0.5, look_sat=1.15, saturation=0.9, white=(1.0, 0.95, 0.88))
     return {"comp": P, "tracer": {"disk": {"octaves": 7}}}

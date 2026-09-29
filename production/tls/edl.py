@@ -41,25 +41,26 @@ class Shot:
 
 
 SHOTS: list[Shot] = [
+    # review round 1 (2026-09-29): reveal at 46 s, S11 a 2.5 s speck, the time goes to the ending
     Shot("BLK0", 0.0, 3.0, "black open", "black"),
-    Shot("S01", 3.0, 10.0, "The Deep", "shot", ("tracer", "blender")),
-    Shot("S02", 10.0, 15.5, "Hull", "shot", ("tracer", "blender")),
-    Shot("S03", 15.5, 21.5, "Listening", "shot", ("tracer", "blender")),
-    Shot("S04", 21.5, 28.0, "Wrong stars", "shot", ("tracer", "blender")),
-    Shot("S05", 28.0, 33.5, "The pull", "shot", ("tracer", "blender")),
-    Shot("S06", 33.5, 37.0, "Glimpse: light", "shot", ("tracer", "blender")),
-    Shot("S07", 37.0, 41.0, "Glimpse: edge", "shot", ("tracer",)),
-    Shot("S08", 41.0, 46.0, "Debris", "shot", ("tracer", "blender")),
-    Shot("S09", 46.0, 48.5, "Breath", "shot", ("tracer", "blender")),
-    Shot("S10", 48.5, 60.0, "The reveal", "shot", ("tracer", "blender")),
-    Shot("S11", 60.0, 65.5, "Scale", "shot", ("tracer", "blender")),
-    Shot("S12", 65.5, 69.5, "Under the arch", "shot", ("tracer", "blender")),
-    Shot("S13", 69.5, 72.5, "Interference", "shot", ("tracer",)),
-    Shot("S14", 72.5, 76.0, "Time", "shot", ("tracer", "blender")),
-    Shot("S15", 76.0, 82.5, "The fall", "shot", ("tracer",)),
+    Shot("S01", 3.0, 8.0, "The Deep", "shot", ("tracer", "blender")),
+    Shot("S02", 8.0, 13.5, "Hull", "shot", ("tracer", "blender")),
+    Shot("S03", 13.5, 19.5, "Listening", "shot", ("tracer", "blender")),
+    Shot("S04", 19.5, 26.0, "Wrong stars", "shot", ("tracer", "blender")),
+    Shot("S05", 26.0, 31.5, "The pull", "shot", ("tracer", "blender")),
+    Shot("S06", 31.5, 35.5, "Glimpse: light", "shot", ("tracer", "blender")),
+    Shot("S07", 35.5, 38.5, "Glimpse: edge", "shot", ("tracer",)),
+    Shot("S08", 38.5, 43.5, "Debris", "shot", ("tracer", "blender")),
+    Shot("S09", 43.5, 46.0, "Breath", "shot", ("tracer", "blender")),
+    Shot("S10", 46.0, 57.5, "The reveal", "shot", ("tracer", "blender")),
+    Shot("S11", 57.5, 60.0, "Scale", "shot", ("tracer", "blender")),
+    Shot("S12", 60.0, 65.0, "Under the arch", "shot", ("tracer", "blender")),
+    Shot("S13", 65.0, 69.0, "Interference", "shot", ("tracer",)),
+    Shot("S14", 69.0, 73.5, "Last look", "shot", ("tracer", "blender")),
+    Shot("S15", 73.5, 82.5, "The fall", "shot", ("tracer",)),
     Shot("BLK1", 82.5, 84.5, "silence", "black"),
-    Shot("TITLE", 84.5, 89.0, "THE LAST SIGNAL", "title"),
-    Shot("BTN", 89.0, 90.0, "button", "black"),
+    Shot("TITLE", 84.5, 88.6, "THE LAST SIGNAL", "title"),
+    Shot("BTN", 88.6, 90.0, "button", "black"),
 ]
 SHOT_BY_ID = {s.id: s for s in SHOTS}
 
@@ -113,85 +114,62 @@ def _motif_train(t0: float, t1: float, cycle: float, stretch: float, gain, sourc
     return out
 
 
+def _start(sid: str) -> float:
+    return next(x.start for x in SHOTS if x.id == sid)
+
+
+# the end restates the motif at the signal's tempo: three short pulses under the title, the long one
+# in the black after it (the ship's light, now the signal)
+TITLE_MOTIF_T0 = 85.1
+
+
 def signal_pulses() -> list[Pulse]:
     """The received signal (audio + interference). Slow, deep: the motif stretched x4.5."""
     cyc = BEACON_CYCLE * SIGNAL_STRETCH   # 9 s
+    drop0, drop1, stop = _start("S08"), _start("S10"), _start("S13")
     def gain(t):
         if t < 3.0:
             return 0.55
-        if 41.0 <= t < 48.5:              # debris + breath: the signal drops out
+        if drop0 <= t < drop1:            # debris + breath: the signal drops out
             return 0.0
-        if t >= 69.5:
+        if t >= stop:
             return 0.0
         # grows through Act I-II
-        return min(1.0, 0.55 + 0.45 * (t - 3.0) / 38.0)
-    pulses = _motif_train(0.0, 69.5, cyc, SIGNAL_STRETCH, gain, "signal", phase=0.6, g=1.0 / SIGNAL_STRETCH)
-    # the button: one last slow pulse in the dark (our ship's, now)
-    pulses.append(Pulse(89.05, True, SIGNAL_STRETCH, 0.8, 1.0 / SIGNAL_STRETCH, "signal"))
+        return min(1.0, 0.55 + 0.45 * (t - 3.0) / max(drop0 - 3.0, 1.0))
+    pulses = _motif_train(0.0, stop, cyc, SIGNAL_STRETCH, gain, "signal", phase=0.6, g=1.0 / SIGNAL_STRETCH)
+    for off, long_ in MOTIF:
+        pulses.append(Pulse(TITLE_MOTIF_T0 + off * SIGNAL_STRETCH, long_, SIGNAL_STRETCH, 0.8 if long_ else 0.55,
+                            1.0 / SIGNAL_STRETCH, "signal"))
     return pulses
 
 
-T_DILATE = 72.5     # time dilation becomes perceptible (S14)
-T_FALL = 76.0       # S15: from here the tracer's measured light curve is the ship's clock
-G_FALL0_DEFAULT = 0.83   # beacon redshift g at the start of S15 (ship at r ~ 10.5 M) if not yet measured
-
-
-def _fall_rate_table():
-    """(t, g) for t >= T_FALL: the smoothed redshift of the beacon measured by tls.lightcurve
-    (shots/S15/lightcurve.json), else an exponential stand-in. g = dtau/dt, the ship's clock rate."""
-    import json
-    from pathlib import Path as _P
-    f = _P(__file__).resolve().parents[1] / "shots" / "S15" / "lightcurve.json"
-    ts = [T_FALL + i * 0.01 for i in range(0, 1401)]
-    try:
-        raw = json.loads(f.read_text())
-        rows = raw["rows"] if isinstance(raw, dict) else raw
-        pts = sorted((r[0], r[2]) for r in rows if r[2] > 0)
-        # smooth the colour-fit noise: running mean over +-0.25 s
-        tt = [p_[0] for p_ in pts]
-        gg = []
-        for i, t_ in enumerate(tt):
-            w = [p_[1] for p_ in pts if abs(p_[0] - t_) <= 0.25]
-            gg.append(sum(w) / len(w))
-        gs = []
-        for t_ in ts:
-            if t_ <= tt[-1]:
-                j = max(0, min(len(tt) - 2, next((k for k in range(len(tt) - 1) if tt[k + 1] >= t_), len(tt) - 2)))
-                u = (t_ - tt[j]) / max(tt[j + 1] - tt[j], 1e-9)
-                gs.append(gg[j] + u * (gg[j + 1] - gg[j]))
-            else:   # beyond the measurement: keep sinking with the horizon's e-folding
-                gs.append(gs[-1] * math.exp(-0.01 / 1.2))
-    except (OSError, KeyError, ValueError, IndexError):
-        gs = [G_FALL0_DEFAULT * math.exp(-(t_ - T_FALL) / 3.2) for t_ in ts]
-    return ts, [max(g, 1e-3) for g in gs]
-
-
-_FALL = None
+T_DILATE = _start("S14")   # time dilation becomes perceptible
+T_FALL = _start("S15")
+# The fall's last motif plays at exactly the signal's tempo (x4.5): three shorts from T_LAST_MOTIF, the
+# long flash 3.6 s later, cut to black during it. The clock is steered to get there (docs/physics.md
+# P21); the picture's colour, dimming and position stay physical (the tracer's worldline).
+T_LAST_MOTIF = 78.3
+G_SIGNAL = 1.0 / SIGNAL_STRETCH
 
 
 def ship_rate(t: float) -> float:
-    """dtau/dt of the ship's clock as the film's camera sees it (= the beacon's redshift g)."""
-    global _FALL
+    """dtau/dt of the ship's clock as the film's camera sees it: 1 until S14, easing down through S14
+    and S15, held at 1/4.5 from just before the last motif to the cut."""
     if t <= T_DILATE:
         return 1.0
-    if _FALL is None:
-        _FALL = _fall_rate_table()
-    if t <= T_FALL:   # S14: the onset, easing from 1 to the value the measured fall starts with
-        u = (t - T_DILATE) / (T_FALL - T_DILATE)
-        return 1.0 - (1.0 - _FALL[1][0]) * u * u * (3 - 2 * u)
-    ts, gs = _FALL
-    i = min(int((t - T_FALL) / 0.01), len(ts) - 2)
-    u = (t - ts[i]) / 0.01
-    return gs[i] + min(max(u, 0.0), 1.0) * (gs[i + 1] - gs[i])
+    t_hold = T_LAST_MOTIF - 0.4
+    if t >= t_hold:
+        return G_SIGNAL
+    u = (t - T_DILATE) / (t_hold - T_DILATE)
+    # log-linear from 1 to 1/4.5 with soft ends (smoothstep in log rate)
+    w = u * u * (3 - 2 * u)
+    return math.exp(math.log(G_SIGNAL) * w)
 
 
 _CLOCK = None
 
 
-def ship_clock(t: float) -> float:
-    """Ship proper time as seen by the film's camera (the beacon's clock): the integral of ship_rate.
-    Normal until S14; gentle dilation through S14 (x1 -> x1.2, what r ~ 10 M really gives); S15 follows
-    the relativistic infall measured from the tracer, down to a frozen, fading clock."""
+def _clock_raw(t: float) -> float:
     global _CLOCK
     if t <= T_DILATE:
         return t
@@ -207,6 +185,16 @@ def ship_clock(t: float) -> float:
     i = min(int((t - T_DILATE) / 0.005), len(tab) - 2)
     u = (t - tab[i]) / 0.005
     return tau[i] + u * (tau[i + 1] - tau[i])
+
+
+def ship_clock(t: float) -> float:
+    """Ship proper time as the film's camera sees it (the beacon's clock), phased so a motif starts
+    exactly at T_LAST_MOTIF."""
+    return _clock_raw(t) + BEACON_PHASE
+
+
+BEACON_PHASE = 0.0
+BEACON_PHASE = (-_clock_raw(T_LAST_MOTIF)) % BEACON_CYCLE
 
 
 def beacon_flashes(t0: float = 0.0, t1: float = 82.5) -> list[Pulse]:
@@ -277,30 +265,35 @@ class Cue:
     params: dict = field(default_factory=dict)
 
 
-CUES: list[Cue] = [
-    Cue(0.0, "room_tone_in", {"dur": 3.0}),
-    Cue(3.0, "drone_deep", {"until": 41.0}),
-    Cue(10.0, "hull_creak", {}),
-    Cue(15.5, "dish_servo", {"dur": 2.4}),
-    Cue(21.5, "lensing_swell", {"until": 33.5}),
-    Cue(33.2, "reverse_swell", {"hit": 33.5}),
-    Cue(33.5, "low_hit", {"level": 0.6}),
-    Cue(37.0, "shimmer", {"dur": 4.0}),
-    Cue(41.0, "debris_rumble", {"dur": 5.0}),
-    Cue(46.0, "near_silence", {"dur": 2.5}),
-    Cue(48.2, "reverse_swell", {"hit": 48.5}),
-    Cue(48.5, "braam", {"level": 1.0, "tail": 7.0}),
-    Cue(48.5, "sub_drop", {"level": 1.0}),
-    Cue(60.0, "low_hit", {"level": 0.7}),
-    Cue(60.0, "tension_pad", {"until": 76.0}),
-    Cue(65.5, "whoosh", {"level": 0.8}),
-    Cue(66.5, "shepard_riser", {"until": 76.0}),
-    Cue(69.5, "interference_burst", {"dur": 3.0}),
-    Cue(72.5, "time_stretch", {"dur": 10.0}),
-    Cue(82.5, "hard_cut_silence", {"dur": 2.0}),
-    Cue(84.5, "title_sting", {"level": 1.0, "tail": 4.5}),
-    Cue(89.05, "last_signal", {}),
-]
+def _cues() -> list[Cue]:
+    S = _start
+    return [
+        Cue(0.0, "room_tone_in", {"dur": 3.0}),
+        Cue(S("S01"), "drone_deep", {"until": S("S08")}),
+        Cue(S("S02"), "hull_creak", {}),
+        Cue(S("S03"), "dish_servo", {"dur": 2.4}),
+        Cue(S("S04"), "lensing_swell", {"until": S("S06")}),
+        Cue(S("S06") - 0.3, "reverse_swell", {"hit": S("S06")}),
+        Cue(S("S06"), "low_hit", {"level": 0.6}),
+        Cue(S("S07"), "shimmer", {"dur": S("S08") - S("S07")}),
+        Cue(S("S08"), "debris_rumble", {"dur": S("S09") - S("S08")}),
+        Cue(S("S09"), "near_silence", {"dur": S("S10") - S("S09")}),
+        Cue(S("S10") - 0.3, "reverse_swell", {"hit": S("S10")}),
+        Cue(S("S10"), "braam", {"level": 1.0, "tail": 7.0}),
+        Cue(S("S10"), "sub_drop", {"level": 1.0}),
+        Cue(S("S11"), "low_hit", {"level": 0.7}),
+        Cue(S("S11"), "tension_pad", {"until": S("S15")}),
+        Cue(S("S12"), "whoosh", {"level": 0.8}),
+        Cue(S("S12") + 1.0, "shepard_riser", {"until": S("S15")}),
+        Cue(S("S13"), "interference_burst", {"dur": S("S14") - S("S13")}),
+        Cue(S("S14"), "time_stretch", {"dur": S("BLK1") - S("S14")}),
+        Cue(S("BLK1"), "hard_cut_silence", {"dur": S("TITLE") - S("BLK1")}),
+        Cue(S("TITLE"), "title_sting", {"level": 1.0, "tail": 4.1}),
+        Cue(TITLE_MOTIF_T0 + MOTIF[-1][0] * SIGNAL_STRETCH, "last_signal", {}),
+    ]
+
+
+CUES: list[Cue] = _cues()
 SILENCE = [(82.5, 84.5)]              # true digital zero
 
 

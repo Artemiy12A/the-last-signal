@@ -32,8 +32,8 @@ class CompParams:
     glare: float = 0.012                      # very wide veiling glare
     streak: float = 0.06                      # anamorphic streak gain
     streak_threshold: float = 24.0            # linear threshold (x mid grey 0.18 ~ 130x)
-    streak_len: float = 220.0                 # px (sigma of the horizontal blur)
-    streak_tint: tuple = (0.75, 0.85, 1.0)
+    streak_len: float = 90.0                  # px (sigma of the horizontal blur)
+    streak_tint: tuple = (0.85, 0.9, 1.0)
     halation: float = 0.05
     halation_threshold: float = 1.5
     ca: float = 1.2                           # px of R/B separation at the frame corner
@@ -115,11 +115,16 @@ def lens_remap(img: np.ndarray, distortion: float, ca: float) -> np.ndarray:
     cx, cy = (W - 1) / 2, (H - 1) / 2
     nx, ny = (x - cx) / cx, (y - cy) / cx          # normalised by half-width
     r2 = nx * nx + ny * ny
+    # zoom in by the corner's stretch so no sample falls outside the frame (clamped edge samples smear
+    # stars on the border into short horizontal dashes)
+    r2c = 1.0 + (H / W) ** 2
+    kc = distortion * r2c + abs(ca / cx)
+    zx, zy = 1.0 / (1.0 + max(kc, 0.0)), 1.0 / (1.0 + 0.6 * max(kc, 0.0))
     out = np.empty_like(img)
     for c, sgn in ((0, 1.0), (1, 0.0), (2, -1.0)):
-        k = distortion * r2 + sgn * (ca / cx) * r2 / max(1.0 + (H / W) ** 2, 1e-6)
-        sx = cx + (x - cx) * (1 + k * 1.0)
-        sy = cy + (y - cy) * (1 + k * 0.6)
+        k = distortion * r2 + sgn * (ca / cx) * r2 / max(r2c, 1e-6)
+        sx = cx + (x - cx) * (1 + k * 1.0) * zx
+        sy = cy + (y - cy) * (1 + k * 0.6) * zy
         out[..., c] = ndimage.map_coordinates(img[..., c], [sy, sx], order=1, mode="nearest")
     return out
 
@@ -243,9 +248,13 @@ def composite(layers: dict, P: CompParams, t: float = 0.0) -> np.ndarray:
             img = img + _blur(img, 260) * P.glare
     if P.streak > 0:
         L = img @ LUMA
-        hi = np.clip(L - P.streak_threshold, 0, None)[..., None] * (img / np.maximum(L, 1e-6)[..., None])
+        ex = np.clip(L - P.streak_threshold, 0, None)
+        # soft knee: a blinding point must not throw a line across the frame
+        knee = 6.0 * P.streak_threshold
+        ex = ex / (1.0 + ex / knee)
+        hi = ex[..., None] * (img / np.maximum(L, 1e-6)[..., None])
         if hi.max() > 0:
-            st = _hblur(hi, P.streak_len) * 3.0 + _hblur(hi, P.streak_len * 0.25)
+            st = _hblur(hi, P.streak_len) * 1.5 + _hblur(hi, P.streak_len * 0.25)
             img = img + st * P.streak * np.asarray(P.streak_tint, np.float32)
     if P.halation > 0:
         L = img @ LUMA

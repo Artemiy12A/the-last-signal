@@ -2,7 +2,7 @@
 (signal pulses, beacon flashes, radio interference) are driven directly from the EDL functions.
 
 Levels are in dBFS before mastering (the master normalises to -14 LUFS afterwards). The tonal
-centre is D: signal root D3, beacon root 4.5 x D3, braam / sub / title on D1-D2.
+centre is D: signal root D3, beacon root 4.5 x D3, reveal hit / sub / title on D1-D2.
 """
 from __future__ import annotations
 
@@ -51,7 +51,11 @@ SIGNAL_DB = -17.0          # received signal, pulse gain 1 (before the act offse
 SIGNAL_ACT = [(0.0, -10.5), (S("S01", 3.0), -10.0), (S("S02", 10.0), -12.0), (S("S04", 21.5), -12.0), (S("S05", 28.0), -10.0),
               (S("S06", 33.5), -8.0), (S("S08", 41.0), -6.0), (S("S10", 48.5), -3.0), (edl.DURATION, -3.0)]
 BEACON_DB = -34.0          # the ship's tick at nearness 1
-RING_ECHO_DELAY = 3.0      # s after the last beacon flash (cinema: physical ~16 M is ~6.6 s)
+# mix-bus fader ride (dB, all stems): Act I sits 6-8 dB up so it survives phone speakers, Act II
+# a little less, back to unity before the reveal's J-cut swell
+ACT_RIDE = [(0.0, 7.0), (S("S05", 26.0) - 1.0, 7.0), (S("S05", 26.0) + 1.0, 4.0),
+            (S("S09", 43.5) + 0.3, 4.0), (S("S10", 46.0) - 1.2, 0.0), (edl.DURATION, 0.0)]
+LAST_MOTIF_DB = 3.0        # the fall's last motif (the ship as the signal) sits above the signal's level
 WARP_BETA = 0.45           # sound time-dilation = (dtau/dt)^beta (cinema: physical beta = 1)
 SOUND_MAX_STRETCH = 10.0   # cap for the sound of a flash (x25 would put the root at 26 Hz)
 
@@ -61,11 +65,14 @@ def signal_act(t: float) -> float:
 
 
 LIGHTCURVE = Path(__file__).resolve().parents[1] / "shots" / "S15" / "lightcurve.json"
+LC_GAIN_RANGE_DB = 4.0     # how far the measured intensity may move a flash's level (sound)
 
 
 def load_lightcurve(path: Path) -> np.ndarray:
-    """(n, 3) array [film_time, intensity, redshift g], sorted by time. Accepts a bare list of rows
-    or {"columns": [...], "rows": [...]} (columns matched by name: *time*, *intens*, *red*)."""
+    """(n, 3) array [film_time, intensity, redshift g], sorted by time, redshift de-glitched
+    (samples more than 0.12 from the 5-sample running median are replaced by it). Accepts a bare
+    list of rows or {"columns": [...], "rows": [...]} (columns matched by name)."""
+    from scipy.ndimage import median_filter
     raw = json.loads(path.read_text())
     if isinstance(raw, dict):
         cols = [c.lower() for c in raw.get("columns", [])]
@@ -76,51 +83,39 @@ def load_lightcurve(path: Path) -> np.ndarray:
         data = rows[:, [col("time", 0), col("intens", 1), col("red", 2)]]
     else:
         data = np.array(raw, dtype=float)
-    return data[np.argsort(data[:, 0])]
-
-
-def flashes_from_lightcurve(path: Path, t0: float, t1: float) -> list:
-    """Beacon flashes measured from the tracer's S15 light curve: JSON [[film_time, intensity,
-    redshift], ...] or {"columns": [...time..., ...intens..., ...red...], "rows": [...]}. Each prominent peak (in log intensity) becomes a flash: onset at the half-rise
-    point, stretch = 1/redshift, long/short from the flash's proper-time width, gain from the
-    peak intensity (compressed, ^0.3, relative to the first S15 flash)."""
-    from scipy.signal import find_peaks, peak_widths
-    data = load_lightcurve(path)
-    m = (data[:, 0] >= t0 - 0.5) & (data[:, 0] < t1)
-    t, inten, red = data[m, 0], np.maximum(data[m, 1], 0.0), np.clip(data[m, 2], 1e-3, 1.0)
-    if len(t) < 5 or inten.max() <= 0:
-        return []
-    li = np.log10(inten + inten.max() * 1e-5)
-    pk, _ = find_peaks(li, prominence=0.3)
-    if len(pk) == 0:
-        return []
-    wid, _, left, _ = peak_widths(inten, pk, rel_height=0.5)
-    dt = np.median(np.diff(t))
-    ref = inten[pk[0]]
-    out = []
-    for p_, w_, l_ in zip(pk, wid, left):
-        t_on = float(np.interp(l_, np.arange(len(t)), t))
-        if not (t0 <= t_on < t1):
-            continue
-        g = float(np.interp(t_on, t, red))
-        s = max(1.0, 1.0 / g)
-        long_ = (w_ * dt * g) > 0.5 * (edl.FLASH_SHORT + edl.FLASH_LONG)
-        gain = float(np.clip((inten[p_] / ref) ** 0.3, 0.08, 1.0))
-        out.append(edl.Pulse(t_on, bool(long_), s, gain, g, "beacon"))
-    return out
+    data = data[np.argsort(data[:, 0])].copy()
+    g = np.clip(data[:, 2], 1e-3, 1.0)
+    med = median_filter(g, size=5, mode="nearest")
+    data[:, 2] = np.where(np.abs(g - med) > 0.12, med, g)
+    data[:, 1] = np.maximum(data[:, 1], 0.0)
+    return data
 
 
 def beacon_flashes() -> tuple[list, bool]:
-    """edl.beacon_flashes(), with S15's flashes replaced by the measured light curve if present."""
+    """Our ship's flashes. Onsets, long/short, stretch and pitch always come from
+    edl.beacon_flashes() (the steered clock: the last motif is exactly the signal). If the tracer's
+    S15 light curve exists it only (a) scales each S15 flash's gain by its measured peak intensity,
+    within +-LC_GAIN_RANGE_DB/2, and (b) sets the flash's tone colour from the measured redshift
+    (attribute `colour_g`); flashes already at the signal's stretch keep the signal's voice."""
     fl = edl.beacon_flashes()
     s15 = edl.SHOT_BY_ID.get("S15")
     if s15 is None or not LIGHTCURVE.exists():
         return fl, False
-    meas = flashes_from_lightcurve(LIGHTCURVE, s15.start, s15.end)
-    if not meas:
+    lc = load_lightcurve(LIGHTCURVE)
+    sel = [f for f in fl if s15.start <= f.t < s15.end]
+    if not sel or len(lc) < 3:
         return fl, False
-    keep = [f for f in fl if not (s15.start <= f.t < s15.end)]
-    return sorted(keep + meas, key=lambda p: p.t), True
+    peaks = []
+    for f in sel:
+        dur = (edl.FLASH_LONG if f.long else edl.FLASH_SHORT) * f.stretch
+        m = (lc[:, 0] >= f.t - 0.03) & (lc[:, 0] <= f.t + dur + 0.08)
+        peaks.append(float(lc[m, 1].max()) if m.any() else float(np.interp(f.t, lc[:, 0], lc[:, 1])))
+    ref = max(peaks) if max(peaks) > 0 else 1.0
+    for f, pk in zip(sel, peaks):
+        rel = np.clip(pk / ref, 1e-4, 1.0) ** 0.3               # 0..1, compressed
+        f.gain = float(db(-LC_GAIN_RANGE_DB * (1.0 - rel)))
+        f.colour_g = float(np.interp(f.t, lc[:, 0], lc[:, 2]))
+    return fl, True
 
 
 def shot_value(table, t, default):
@@ -170,49 +165,64 @@ def room_tone(mix, t_in: float, dur: float) -> None:
     mix.add("drones", sub, 0.0)
 
 
+def signal_voice(p, seed: str, rough: float) -> np.ndarray:
+    """The received signal's full voice for one pulse (stereo, before level): clean FM voice
+    M/S-widened, radio copy near centre. The beacon's last motif (stretch 4.5) uses it too."""
+    clean, rad, w = motif.signal_pulse(p, seed, rough)
+    clean_st = dsp.widen(clean, 0.65 * w, seed)
+    r = dsp.rng("sigpan" + seed)
+    return clean_st * (1.0 - 0.35 * w) + dsp.pan(rad, r.uniform(-0.15, 0.15)) * 0.9 * w
+
+
 def signal_layer(mix) -> None:
     """The received signal: every edl.signal_pulses() pulse, radio-carried, wide, long tail."""
     for i, p in enumerate(edl.signal_pulses()):
         rough = 0.6 + 0.6 * shot_value(SHIP_COUPLING, p.t, 0.5)
-        clean, rad, w = motif.signal_pulse(p, f"sig{i}", rough)
+        y = signal_voice(p, f"sig{i}", rough)
         g = db(SIGNAL_DB + signal_act(p.t)) * p.gain
-        clean_st = dsp.widen(clean, 0.65 * w, f"sig{i}")
-        r = dsp.rng(f"sigpan{i}")
-        y = clean_st * (1.0 - 0.35 * w) + dsp.pan(rad, r.uniform(-0.15, 0.15)) * 0.9 * w
         mix.add("signal", y, p.t, g, sends={"void": 0.6})
         mix.event(p.t, "signal_pulse", long=p.long, gain=round(p.gain, 3))
 
 
 def beacon_layer(mix) -> None:
-    """Our ship's strobe tick: every edl.beacon_flashes() flash. After 72.5 s each flash carries the
-    EDL's stretch/redshift, so the tick itself slows and sinks into the signal's voice."""
+    """Our ship's strobe tick: every edl.beacon_flashes() flash. From S14 each flash carries the
+    EDL's stretch/redshift, so the tick itself slows and sinks; flashes at the signal's stretch are
+    rendered by the signal's own voice (same pitch, tempo, radio channel, tail): the ship becomes
+    the signal."""
     flashes, measured = beacon_flashes()
     if measured:
-        mix.event(edl.SHOT_BY_ID["S15"].start, "s15_lightcurve", path=str(LIGHTCURVE))
+        mix.event(edl.SHOT_BY_ID["S15"].start, "s15_lightcurve_gain_colour", path=str(LIGHTCURVE))
     for i, f in enumerate(flashes):
         shot = edl.shot_at(f.t)
         gain, p, near = BEACON_SHOT.get(shot.id, (0.3, 0.0, 0.5))
         w = motif.morph_weight(f.stretch)
         if gain <= 0 and w <= 0:
             continue
-        if p is None:                       # S01: the ship crosses the frame
-            p = -0.65 + 1.3 * shot.local(f.t)
         seed = f"bcn{i}"
-        s_eff = min(f.stretch, SOUND_MAX_STRETCH)
-        x, env = motif.voice(f.long, s_eff, max(f.redshift, 1.0 / SOUND_MAX_STRETCH), seed)
-        if near < 1.0:
-            x = dsp.lp(x, 2200.0 + 14000.0 * near ** 2, order=2)
-        if w > 0:
-            x = x * (1.0 - 0.35 * w) + motif.radio(x, env, seed, 0.5 + 0.5 * w) * 0.9 * w
-        y = dsp.widen(x, 0.08 + 0.6 * w, seed)
-        y = y * np.array(dsp.pan_gains(p * (1 - w))) * 1.4142
-        # level: the ship's small tick grows into the signal's size as it stretches
-        lvl_db = (1 - w) * (BEACON_DB + 20 * np.log10(max(gain, 1e-3)) - 6.0 * (1 - near)) \
-            + w * (SIGNAL_DB + signal_act(f.t) + 1.0) + 10 * np.log10(max(f.gain, 1e-3))   # gain^0.5
-        mix.add("beacon", y, f.t, db(lvl_db),
-                sends={"hull": 0.22 * (1 - w) * near, "void": 0.05 + 0.25 * (1 - near) * (1 - w) + 0.6 * w})
+        lc_db = 20 * np.log10(max(f.gain, 1e-3))
+        if w >= 0.999:                      # the last motif IS the signal
+            y = signal_voice(f, seed, 1.0 + 0.2 * SHIP_COUPLING.get(shot.id, 0.5))
+            lvl_db = SIGNAL_DB + signal_act(f.t) + LAST_MOTIF_DB + lc_db
+            mix.add("beacon", y, f.t, db(lvl_db), sends={"void": 0.6})
+        else:
+            if p is None:                   # S01: the ship crosses the frame
+                p = -0.65 + 1.3 * shot.local(f.t)
+            s_eff = min(f.stretch, SOUND_MAX_STRETCH)
+            x, env = motif.voice(f.long, s_eff, max(f.redshift, 1.0 / SOUND_MAX_STRETCH), seed)
+            bright = near if not hasattr(f, "colour_g") else min(near, 0.35 + 0.65 * f.colour_g)
+            if bright < 1.0:
+                x = dsp.lp(x, 2200.0 + 14000.0 * bright ** 2, order=2)
+            if w > 0:
+                x = x * (1.0 - 0.35 * w) + motif.radio(x, env, seed, 0.5 + 0.5 * w) * 0.9 * w
+            y = dsp.widen(x, 0.08 + 0.6 * w, seed)
+            y = y * np.array(dsp.pan_gains(p * (1 - w))) * 1.4142
+            # level: the ship's small tick grows into the signal's size as it stretches
+            lvl_db = (1 - w) * (BEACON_DB + 20 * np.log10(max(gain, 1e-3)) - 6.0 * (1 - near)) \
+                + w * (SIGNAL_DB + signal_act(f.t) + LAST_MOTIF_DB) + lc_db
+            mix.add("beacon", y, f.t, db(lvl_db),
+                    sends={"hull": 0.22 * (1 - w) * near, "void": 0.05 + 0.25 * (1 - near) * (1 - w) + 0.6 * w})
         mix.event(f.t, "beacon_flash", long=f.long, stretch=round(f.stretch, 3), redshift=round(f.redshift, 3),
-                  level_db=round(lvl_db, 1))
+                  level_db=round(float(lvl_db), 1), signal_voice=bool(w >= 0.999))
     mix.flashes = flashes
 
 
@@ -349,7 +359,7 @@ def cue_reverse_swell(mix, cue) -> None:
     kinds = [c.kind for c in edl.CUES if abs(c.t - hit_t) < 1e-6]
     big = "braam" in kinds
     a, sub, _ = hit_layers(1.0, seed=f"swell{hit_t}")
-    src = a[: n_of(0.25)] + (0.6 * braam_attack() if big else 0.0)
+    src = a[: n_of(0.25)] + (0.6 * source_attack() if big else 0.0)
     wet = dsp.convolve(src, mix.ir["void"])
     rev = wet[::-1]
     L = n_of(float(np.clip(3.0 * lead, 0.8, 2.0)))           # the lead + a little run-up
@@ -391,6 +401,12 @@ def cue_drone_deep(mix, cue) -> None:
     L = abs_sine(D2 - 0.05, t0, n) + 0.6 * abs_sine(A2 + 0.04, t0, n, 1.0)
     R = abs_sine(D2 + 0.06, t0, n, 0.5) + 0.6 * abs_sine(A2 - 0.05, t0, n, 2.0)
     mix.add("drones", np.stack([L, R], 1) * hol[:, None], t0, sends={"void": 0.2})
+    # the same hollow fifth two octaves up, faint and slowly beating: what a phone speaker hears
+    hi = dsp.curve(n, [(t0, -60), (S("S03", 13.5), -56), (S("S05", 26.0), -53), (t1, -52)], t0, "db") * dsp.fade(n, n_of(2.5), n_of(0.8))
+    Lh = abs_sine(4 * D2 - 0.11, t0, n) + 0.7 * abs_sine(2 * A2 + 0.07, t0, n, 1.3) + 0.4 * abs_sine(8 * D2 + 0.13, t0, n, 0.4)
+    Rh = abs_sine(4 * D2 + 0.09, t0, n, 0.7) + 0.7 * abs_sine(2 * A2 - 0.08, t0, n, 2.2) + 0.4 * abs_sine(8 * D2 - 0.12, t0, n, 1.9)
+    shimmer = 1.0 + 0.3 * np.sin(dsp.TWO_PI * 0.037 * t + 0.4)
+    mix.add("drones", np.stack([Lh, Rh], 1) * (hi * shimmer)[:, None], t0, sends={"void": 0.35})
     r = dsp.rng("air")
     air = dsp.bp(dsp.colored(n, r, -3.0), 2500.0, 9000.0, order=2)
     air *= db(-58) * dsp.fade(n, n_of(3.0), n_of(1.0)) * (1 + 0.4 * np.sin(dsp.TWO_PI * 0.05 * t))
@@ -563,60 +579,95 @@ def cue_near_silence(mix, cue) -> None:
 
 
 # ============================================================================ the reveal
-_BRAAM_CACHE: dict = {}
+# ------------------------------------------------------------ the motif's own partials, reused
+# 2-op FM with a sqrt(2) modulator puts energy at f * |1 + k*sqrt(2)|: these ratios are the motif's
+# spectral fingerprint. The reveal, the riser, the fall and the awe chord are all built from them.
+MOTIF_RATIOS = (1.0, 2.414, 0.414, 3.828, 1.828, 3.243, 5.243)     # in order of entry
+MOTIF_AMPS = (1.0, 0.8, 0.7, 0.45, 0.45, 0.3, 0.2)
 
 
-def braam_voice(n: int, seed: str) -> np.ndarray:
-    """One channel of the braam: D minor power stack of detuned saws, saturated, filter blat."""
-    t = tt(n)
-    bend = 2.0 ** (-1.5 / 12.0 * dsp.smoothstep((t - 0.25) / 2.6))
+def motif_cluster(root, n: int, density, detune_cents, seed: str) -> np.ndarray:
+    """An inharmonic cluster on the motif's FM partials over a (per-sample) root. `density` 0..1
+    brings partials in one by one (in MOTIF_RATIOS order); each partial is a detuned pair, so
+    `detune_cents` sets the beating."""
+    r = dsp.rng("cluster:" + seed)
+    root = np.broadcast_to(np.asarray(root, dtype=float), (n,))
+    density = np.broadcast_to(np.asarray(density, dtype=float), (n,))
+    det = np.broadcast_to(np.asarray(detune_cents, dtype=float), (n,))
     y = np.zeros(n)
-    for f, a in ((D1, 1.0), (D2, 0.85), (A2, 0.6), (D3, 0.35), (F3, 0.16)):
-        y += a * saw_stack(f * bend, n, 8, 12.0, f"{seed}{f}")
-    y /= 1.6
-    drive = 4.0 * (0.6 + 0.4 * np.exp(-t / 0.6))
-    y = np.tanh(drive * y) / np.tanh(4.0)
-    fc = dsp.curve(n, [(0, 110), (0.11, 2900), (0.5, 1900), (1.5, 950), (4.0, 420), (t[-1] + 1e-3, 220)], kind="exp")
-    y_lp = dsp.tv_filter(y, fc, 1.25, "lp", 64)
-    formant = dsp.bp(y, 500.0, 1200.0, order=2) * dsp.curve(n, [(0, 0.9), (1.5, 0.5), (t[-1] + 1e-3, 0.2)])
-    return y_lp + 0.55 * formant
+    k_n = len(MOTIF_RATIOS)
+    for k, (ratio, amp) in enumerate(zip(MOTIF_RATIOS, MOTIF_AMPS)):
+        e = dsp.smoothstep((density * k_n - k) / 1.0)
+        if e.max() <= 0:
+            continue
+        for sgn in (-1.0, 1.0):
+            f = root * ratio * 2 ** (sgn * 0.5 * det / 1200.0)
+            y += 0.5 * amp * e * np.sin(dsp.phase(f) + r.uniform(0, dsp.TWO_PI))
+    return y / np.sqrt(sum(a * a for a in MOTIF_AMPS))
 
 
-def braam_attack() -> np.ndarray:
-    """First 250 ms of the braam (mono) for the reverse swell."""
-    if "atk" not in _BRAAM_CACHE:
+_SOURCE_CACHE: dict = {}
+
+
+def source_voice(n: int, seed: str) -> np.ndarray:
+    """One channel of the reveal hit: the signal's long pulse slowed x9 (D2), with D3 and D4 layers in
+    the same time scale, detuned copies, driven, a resonant filter bloom, a formant and the radio
+    channel on the D3 layer -- the reveal sounds like the source of the signal."""
+    t = tt(n)
+    y = np.zeros(n)
+    radio_src = np.zeros(n)
+    r = dsp.rng("src:" + seed)
+    for g, amp, copies in ((1 / 9, 1.0, 4), (2 / 9, 0.6, 3), (4 / 9, 0.3, 2)):
+        for k in range(copies):
+            det = (k - (copies - 1) / 2) * 7.0 + r.uniform(-1.5, 1.5)
+            x, env = motif.voice(True, 9.0, g, f"{seed}{g:.3f}{k}", detune_cents=det)
+            m = min(n, len(x))
+            y[:m] += amp * x[:m] / copies ** 0.5
+            if g == 2 / 9 and k == 0:
+                radio_src[:m] = motif.radio(x[:m], env[:m], f"{seed}radio", 1.2)
+    y = dsp.hp(y, 28.0, order=2)
+    drive = 2.6 * (0.6 + 0.4 * np.exp(-t / 0.6))
+    y = np.tanh(drive * y / 1.4) / np.tanh(2.6)
+    fc = dsp.curve(n, [(0, 130), (0.1, 3200), (0.5, 1900), (1.5, 950), (4.0, 450), (t[-1] + 1e-3, 250)], kind="exp")
+    y_lp = dsp.tv_filter(y, fc, 1.1, "lp", 64)
+    formant = dsp.bp(y, 450.0, 1100.0, order=2) * dsp.curve(n, [(0, 0.8), (1.5, 0.45), (t[-1] + 1e-3, 0.2)])
+    return y_lp + 0.45 * formant + 0.35 * radio_src
+
+
+def source_attack() -> np.ndarray:
+    """First 250 ms of the reveal hit (mono) for the reverse swell."""
+    if "atk" not in _SOURCE_CACHE:
         m = n_of(0.25)
-        _BRAAM_CACHE["atk"] = braam_voice(m, "braamL") * dsp.ar(m, 0.06, 1.0, 1.0)
-    return _BRAAM_CACHE["atk"]
+        _SOURCE_CACHE["atk"] = source_voice(m, "srcL")
+    return _SOURCE_CACHE["atk"]
 
 
 def cue_braam(mix, cue) -> None:
+    """THE REVEAL hit (EDL cue kind "braam"): not a brass braam but the signal's own voice, slowed
+    and lowered to D2 and stacked -- where the signal comes from -- over body, sub drop and a hall."""
     lvl = cue.params.get("level", 1.0)
     tail = cue.params.get("tail", 7.0)
     n = n_of(tail)
     t = tt(n)
-    env = dsp.ar(n, 0.06, 0.0, 1e9) * dsp.curve(n, [(0, 1.0), (0.4, 0.95), (3.5, 0.62), (tail, 0.0)])
-    env *= np.exp(-np.maximum(t - 3.5, 0) / 1.3)
-    st = np.stack([braam_voice(n, "braamL"), braam_voice(n, "braamR")], 1) * env[:, None]
-    mix.add("music", st, cue.t, db(-9.0) * lvl, sends={"hall": 0.35})
+    env = dsp.curve(n, [(0, 1.0), (3.5, 0.85), (tail, 0.0)]) * np.exp(-np.maximum(t - 4.0, 0) / 1.2)
+    st = np.stack([source_voice(n, "srcL"), source_voice(n, "srcR")], 1) * env[:, None]
+    mix.add("music", st, cue.t, db(-7.0) * lvl, sends={"hall": 0.35, "void": 0.15})
     # impact layer on the attack
-    a, sub, rumble = hit_layers(1.0, body_f=D2, sub_f=D1 * 1.25, tail=2.5, seed="braamhit")
+    a, sub, rumble = hit_layers(1.0, body_f=D2, sub_f=D1 * 1.25, tail=2.5, seed="revealhit")
     mix.add("fx", dsp.widen(a, 0.4, "bh"), cue.t, db(-10.0) * lvl, sends={"hall": 0.4})
     mix.add("fx", dsp.widen(rumble, 1.0, "bhr"), cue.t, db(-8.0) * lvl, sends={"hall": 0.3})
     mix.duck_at(cue.t, 9.0 * lvl, 2.8)
     mix.hits.append(cue.t)
-    # the awe after the blast: a vast, slow D2/A2/D3/E3 chord that holds the reveal
+    # the awe that holds the reveal (through S11): a slow cluster on the motif's partials over D2
     t0 = cue.t + 0.8
-    t_end = next((c.t for c in edl.CUES if c.t > cue.t + 1.0), cue.t + 11.5)
+    t_end = S("S12", cue.t + 14.0)
     m = n_of(t_end - t0 + 1.0)
-    lv = dsp.curve(m, [(t0, -60), (t0 + 3.0, -33), (t_end - 2.0, -31), (t_end, -29), (t_end + 1.0, -60)], 0.0 + t0, "db")
-    ch = np.zeros((m, 2))
-    for f, a_ in ((D2, 1.0), (A2, 0.8), (D3, 0.5), (E3, 0.3), (A3, 0.25)):
-        for c in range(2):
-            det = (-1) ** c * 0.12
-            ch[:, c] += a_ * (abs_sine(f + det, t0, m, c) + 0.3 * saw_stack(f, m, 3, 7.0, f"awe{f}{c}"))
-    ch = dsp.lp(ch, 900.0, order=2)
-    mix.add("music", ch * lv[:, None] * 0.4, t0, sends={"void": 0.35})
+    lv = dsp.curve(m, [(t0, -60), (t0 + 3.0, -31), (t_end - 3.0, -30), (t_end, -28), (t_end + 1.0, -60)], t0, "db")
+    ch = np.stack([motif_cluster(D2 * (1 + (-1) ** c * 0.0006), m, dsp.curve(m, [(0, 0.3), (6.0, 1.0), (m / SR, 1.0)]),
+                                 dsp.curve(m, [(0, 3.0), (m / SR, 9.0)]), f"awe{c}") for c in range(2)], 1)
+    ch += 0.5 * np.stack([motif_cluster(D3, m, 0.45, 5.0, f"aweh{c}") for c in range(2)], 1)
+    ch = dsp.lp(ch, 1400.0, order=2)
+    mix.add("music", ch * lv[:, None], t0, sends={"void": 0.35})
     # the hole's hum under the reveal (sub arc: rebuilds from the drop toward S11)
     m2 = n_of(t_end - cue.t + 0.5)
     hv = dsp.curve(m2, [(cue.t, -70), (cue.t + 4.0, -36), (t_end, -30), (t_end + 0.5, -30)], cue.t, "db")
@@ -647,7 +698,7 @@ def cue_tension_pad(mix, cue) -> None:
     fc = 300.0 * (2300.0 / 300.0) ** u
     trem_rate = 5.0 + 7.0 * u ** 1.5
     trem = 1.0 - 0.35 * (0.5 + 0.5 * np.sin(np.cumsum(dsp.TWO_PI * trem_rate / SR)))
-    lvl = dsp.curve(n, [(t0, -60), (t0 + 1.5, -36), (S("S12", 65.5), -30), (S("S13", 69.5), -24), (T_SLOW, -19),
+    lvl = dsp.curve(n, [(t0, -44), (t0 + 0.4, -34), (S("S12", 65.5), -30), (S("S13", 69.5), -24), (T_SLOW, -19),
                          (max(t1, T_SLOW + 0.1), -19)], t0, "db")
     lvl *= dsp.fade(n, 0, n_of(0.6))
     st = np.zeros((n, 2))
@@ -676,23 +727,21 @@ def cue_whoosh(mix, cue) -> None:
 
 
 def cue_shepard_riser(mix, cue) -> None:
-    """Shepard-Risset glissando (octave partials, Gaussian spectral window) + a sweeping noise riser."""
+    """The build into S13 (EDL cue kind "shepard_riser"; no Shepard tone): the motif's partials as a
+    cluster whose root glides up two octaves, D2 -> D4, accelerating, with partials entering one by
+    one and their beating widening; plus a radio-band noise riser. After T_SLOW the time-stretch
+    warp turns the rise over into a sink."""
     t0, t1 = cue.t, cue.params["until"]
     n = n_of(t1 - t0 + 0.5)
     t = tt(n)
-    oct_rate = 1.0 / 5.5
-    y = np.zeros(n)
-    c0 = np.log2(520.0)
-    for k in range(9):
-        lf = np.log2(40.0) + ((k + oct_rate * t) % 9.0)
-        f = 2.0 ** lf
-        a = np.exp(-0.5 * ((lf - c0) / 1.5) ** 2)
-        y += a * np.sin(dsp.phase(f))
-    lvl = dsp.curve(n, [(t0, -60), (t0 + 1.0, -40), (S("S13", 69.5), -32), (T_SLOW, -24), (max(t1, T_SLOW + 0.1), -22)],
-                     t0, "db") * dsp.fade(n, 0, n_of(0.5))
-    mix.add("music", dsp.widen(y * lvl * 0.5, 0.7, "shep"), t0, sends={"void": 0.3})
     u = np.clip(t / (T_SLOW - t0), 0, 1)
-    nz = dsp.tv_filter(dsp.colored(n, dsp.rng("riser"), -3.0), 400.0 * 15 ** u, 2.0, "bp", 64)
+    u2 = np.clip((t - (T_SLOW - t0)) / max(t1 - T_SLOW, 0.1), 0, 1)
+    root = D2 * 2.0 ** (2.0 * u ** 1.7 + 0.5 * u2)
+    y = motif_cluster(root, n, 0.15 + 0.85 * u, 3.0 + 16.0 * u, "rise")
+    lvl = dsp.curve(n, [(t0, -60), (t0 + 1.0, -40), (S("S13", 65.0), -30), (T_SLOW, -22), (max(t1, T_SLOW + 0.1), -21)],
+                     t0, "db") * dsp.fade(n, 0, n_of(0.5))
+    mix.add("music", dsp.widen(y * lvl * 0.9, 0.7, "rise"), t0, sends={"void": 0.3})
+    nz = dsp.tv_filter(dsp.colored(n, dsp.rng("riser"), -3.0), 300.0 * 11 ** u, 2.0, "bp", 64)
     nv = dsp.curve(n, [(t0, -70), (t0 + 2, -46), (T_SLOW, -27), (max(t1, T_SLOW + 0.1), -27)], t0, "db") * dsp.fade(n, 0, n_of(0.5))
     mix.add("music", dsp.widen(nz * nv, 1.0, "riser"), t0, sends={"void": 0.2})
 
@@ -765,7 +814,7 @@ def cue_interference_burst(mix, cue) -> None:
     rum /= np.sqrt(np.mean(rum ** 2)) + 1e-9
     gate = dsp.lp((r.uniform(0, 1, n_of(dur) // 480 + 1) > 0.3).repeat(480)[:n].astype(float), 60.0, 1)
     out += dsp.widen(rum * (0.5 + 0.5 * gate) * ramp ** 1.5 * db(-9), 0.8, "tear")
-    out = 0.17 * np.tanh(out * db(8.0) / 0.17)          # tearing = saturation; bounded crest factor
+    out = 0.2 * np.tanh(out * db(8.0) / 0.2)          # tearing = saturation; bounded crest factor
     out *= dsp.fade(n, n_of(0.005), n_of(0.004))[:, None]
     mix.add("interference", out, t0, sends={"void": 0.1})
     # digital dropouts across the mix, denser toward the end
@@ -777,72 +826,58 @@ def cue_interference_burst(mix, cue) -> None:
 
 # ============================================================================ Act IV: time
 def ship_rate(t: float) -> float:
+    """dtau/dt of the ship's clock as seen by the camera (edl.ship_rate if the EDL has it)."""
+    if hasattr(edl, "ship_rate"):
+        return float(edl.ship_rate(t))
     dt = 1e-3
     return (edl.ship_clock(t + dt) - edl.ship_clock(t)) / dt
 
 
 def cue_time_stretch(mix, cue) -> None:
-    """72.5-82.5: the world bus slows and sinks (varispeed at (dtau/dt)^beta), the beacon's own
-    flashes carry the EDL stretch; a ghost of its tone glides down with the ship's clock; the last
-    flash echoes once around the ring; then the fall: a descending Shepard tone, a sinking sub and
-    the roar build to the hard cut."""
+    """S14-S15: the world stems slow and sink (varispeed at (dtau/dt)^beta from edl.ship_rate), the
+    beacon's own flashes carry the EDL stretch; a ghost of its tone glides down with the ship's clock
+    and settles on the signal's D3 just before the last motif; then the fall: a cluster of the
+    motif's partials sinking with the clock (and on, an octave, after it holds), a redshift wash, a
+    roar and a sinking sub build to the hard cut."""
     t0 = cue.t
     t1 = t0 + cue.params.get("dur", 10.0)
     mix.warp = (t0, t1)
-    # the slowed world recedes as the fall takes over (output-time gain on the warped stems, dB)
     s15 = S("S15", t0 + 3.5)
-    mix.warp_gain = [(t0, -3.0), (s15 - 0.2, -5.0), (s15 + 3.0, -14.0), (t1, -16.0)]
+    t_last = getattr(edl, "T_LAST_MOTIF", s15 + 4.8)
+    # the slowed world recedes as the fall takes over (output-time gain on the warped stems, dB)
+    mix.warp_gain = [(t0, -2.0), (s15, -5.0), (s15 + 3.0, -14.0), (t1, -16.0)]
     # entry whump
     m = n_of(1.2)
     tm = tt(m)
     wh = np.sin(dsp.phase(35.0 + 85.0 * np.exp(-tm / 0.25))) * (1 - np.exp(-tm / 0.004)) * np.exp(-tm / 0.45)
     wh += dsp.lp(dsp.colored(m, dsp.rng("whump"), -6.0), 300.0) * np.exp(-tm / 0.3) * 0.2
     mix.add("fx", dsp.widen(wh, 0.5, "whump"), t0, db(-13), post=True, sends={"hall": 0.3})
-    # ghost glissando: the beacon's tone frozen and sinking with the ship's clock
+    # ghost glissando: the beacon's tone sinking with the ship's clock, gone before the last motif
     n = n_of(t1 - t0)
     t = t0 + tt(n)
     ts, gv = ctrl_curve(ship_rate, t0, t1, 500)
     g = to_samples(ts, gv, t0, n)
-    a = dsp.smoothstep((t - t0 - 0.2) / 2.0) * np.exp(-np.maximum(t - s15 - 1.0, 0) / 1.4)
-    fl, measured = beacon_flashes()
-    if measured:                                   # S15 follows the tracer's measured redshift
-        lc = load_lightcurve(LIGHTCURVE)
-        after = t >= s15
-        g = np.where(after, np.interp(t, lc[:, 0], np.clip(lc[:, 2], 1e-3, 1.0)), g)
-        a = np.where(after, dsp.smoothstep((t - s15) / 0.4) * dsp.smoothstep((t1 - t) / 0.3) * 0.8,
-                     a * dsp.smoothstep((s15 - t) / 0.12))
+    a = dsp.smoothstep((t - t0 - 0.3) / 2.0) * dsp.smoothstep((t_last - 0.15 - t) / 1.2)
     f = motif.F_BEACON * g
     ph = dsp.phase(f)
     tone = np.sin(ph + 0.6 * np.sin(motif.FM_RATIO * ph)) + 0.4 * np.sin((motif.FM_RATIO - 1) * ph)
-    tone = dsp.hp(tone * a * (f > 30.0), 25.0, 2)
-    mix.add("beacon", dsp.widen(tone, 0.8, "ghost"), t0, db(SIGNAL_DB - 12), sends={"void": 0.7})
-    # the ring echo of the last beacon flash (a measured S15 light curve already contains it)
-    if measured:
-        return_echo = False
-    else:
-        return_echo = True
-    last = [f for f in fl if f.t < t1][-1]
-    x, env = motif.voice(last.long, last.stretch * 1.25, last.redshift / 1.25, "echo")
-    x = dsp.lp(x * 0.6 + motif.radio(x, env, "echo", 1.3) * 0.9, 1400.0, order=2)
-    if return_echo:
-        mix.add("beacon", dsp.widen(x, 0.5, "echo"), last.t + RING_ECHO_DELAY, db(SIGNAL_DB - 9), p=0.6,
-                sends={"void": 0.9})
-        mix.event(last.t + RING_ECHO_DELAY, "ring_echo", of=round(last.t, 3))
+    tone = dsp.hp(tone * a, 25.0, 2)
+    mix.add("beacon", dsp.widen(tone, 0.8, "ghost"), t0, db(SIGNAL_DB - 11), sends={"void": 0.7})
     # ---- the fall (S15): everything sinks in pitch while it grows in weight, until the hard cut
-    fall0 = s15
-    tf0 = fall0 - 1.0
+    tf0 = s15 - 1.0
     n = n_of(t1 - tf0)
     tl = tt(n)
+    tt_abs = tf0 + tl
     u = tl / (t1 - tf0)
     grow = dsp.curve(n, [(0, -70), (1.0, -36), (3.0, -30), (t1 - tf0 - 2.5, -19), (t1 - tf0, -10)], kind="db")
-    # descending Shepard (endless fall), spectral window sinking 420 -> 140 Hz
-    y = np.zeros(n)
-    cen = np.log2(420.0) + np.log2(140.0 / 420.0) * u
-    for k in range(8):
-        lf = np.log2(25.0) + ((k - tl / 6.0) % 8.0)
-        a = np.exp(-0.5 * ((lf - cen) / 1.2) ** 2)
-        y += a * np.sin(dsp.phase(2.0 ** lf))
-    mix.add("music", dsp.widen(y * grow * 0.45, 0.8, "fallshep"), tf0, post=True, sends={"void": 0.25})
+    # the motif's partials sinking with the clock (root = D2 at the signal's rate), then on, an octave
+    ts, gv = ctrl_curve(ship_rate, tf0, t1, 500)
+    rate = to_samples(ts, gv, tf0, n)
+    hold = np.clip((tt_abs - t_last + 0.4) / max(t1 - t_last + 0.4, 0.1), 0, 1)
+    root = D2 * (rate / motif.G_SIGNAL if hasattr(motif, "G_SIGNAL") else rate * edl.SIGNAL_STRETCH) * 2.0 ** (-1.0 * hold)
+    y = motif_cluster(root, n, 1.0, 6.0 + 10.0 * u, "fall")
+    y += 0.5 * motif_cluster(root * 0.5, n, 0.6, 4.0, "fall2")
+    mix.add("music", dsp.widen(y * grow * 0.9, 0.8, "fallclu"), tf0, post=True, sends={"void": 0.25})
     # redshift wash: band noise whose centre sinks 2.6 kHz -> 320 Hz (the light going red)
     r = dsp.rng("wash")
     wash = dsp.tv_filter(dsp.colored(n, r, -3.0), 2600.0 * (320.0 / 2600.0) ** u, 0.8, "bp", 128)
@@ -883,7 +918,7 @@ def cue_title_sting(mix, cue) -> None:
     mix.add("fx", dsp.widen(rumble, 1.0, "thr"), cue.t, g, post=True, sends={"hall": 0.25})
     n = n_of(tail)
     t = tt(n)
-    env = (1 - np.exp(-t / 0.25)) * np.exp(-t / 1.6)
+    env = (1 - np.exp(-t / 0.25)) * np.exp(-t / 1.15)
     bloom = np.zeros((n, 2))
     rb = dsp.rng("bloom")
     for f, amp in ((D2, 0.35), (D3, 0.8), (A3, 0.65), (2 * D3, 0.45), (2 * A3, 0.25)):

@@ -9,8 +9,8 @@ from tls.camera import Cam, smoothstep, v3
 
 SHOT = edl.SHOT_BY_ID["BTN"]
 T0, T1 = SHOT.start, SHOT.end
-T_PULSE = 89.05                    # edl: the last signal pulse (sound cue "last_signal")
-X, Y = 0.62, 0.52                  # where the beacon froze in the last frames of S15
+T_PULSE = edl.TITLE_MOTIF_T0 + edl.MOTIF[-1][0] * edl.SIGNAL_STRETCH   # the long pulse in the dark
+X, Y = 0.633, 0.595                # where the beacon is in the last frames of S15
 
 
 def cam_at(t):
@@ -19,7 +19,9 @@ def cam_at(t):
 
 def params(t, q):
     dt = t - T_PULSE
-    env = 0.0 if dt < 0 else (1 - math.exp(-dt / 0.06)) * math.exp(-dt / 0.45)
+    # the signal's long pulse: 1.26 s on (FLASH_LONG x 4.5), fading into the end
+    on = edl.FLASH_LONG * edl.SIGNAL_STRETCH
+    env = 0.0 if dt < 0 else (1 - math.exp(-dt / 0.08)) * (1.0 if dt < on else math.exp(-(dt - on) / 0.2)) * (1 - 0.35 * min(dt / on, 1))
     env *= 1 - smoothstep(T1 - 0.25, T1 - 0.02, t)          # exact black by 90.0
     glow = 0.012 * (1 - smoothstep(T1 - 0.4, T1 - 0.05, t))  # the frozen remnant, barely there
     k = env + glow

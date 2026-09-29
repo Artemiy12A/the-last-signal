@@ -18,7 +18,7 @@ T0, T1 = SHOT.start, SHOT.end
 
 X0 = [-2.2, -4.0, 9.5]         # ship start (M), high above the disk plane, between camera and hole
 V0 = [0.04, 0.06, -0.16]       # coordinate velocity dx/dt
-BEACON_RATE = 5.0              # M of camera coordinate time per film second
+BEACON_RATE = 3.6              # M of camera coordinate time per film second (the same fall over 9 s)
 T_CAM0 = 72.0                  # camera coordinate time at the start of the shot (+14 M of light travel for the wider vantage)
 MOTIF_M = 6.0                  # ship proper time per motif cycle (M)
 
@@ -60,13 +60,20 @@ def cam_at(t: float) -> Cam:
 def params(t: float, q: str) -> dict:
     u = SHOT.local(t)
     wl = worldline()
+    # flash timing = the EDL's motif on the steered ship clock (physics P21); position, lensing, colour
+    # (T * g) and dimming (g^p_g) = the worldline, traced. Between flashes a faint ember: the ship's hull
+    # and running lights, so the point never leaves the frame before the cut.
+    env = edl.beacon_intensity(t)
     beacon = {
         "table": wl.tolist(), "t_cam": T_CAM0 + BEACON_RATE * (t - T0), "t_span": BEACON_RATE * 0.5 / edl.FPS,
-        "sigma": 0.08, "intensity": 650.0,          # x(65/51)^2 for the wider vantage
-        "T": 11000.0, "p_g": 4.0, "decay": 0.35, "steady": 0.04,
-        "pulses": [list(p) for p in pulses()],
+        "sigma": 0.04, "intensity": 2200.0, "T": 6000.0, "p_g": 2.0, "decay": 0.35,
+        "steady": 0.035 + env, "pulses": [],
     }
-    P = CompParams(exposure=-0.4 - 0.8 * smoothstep(0.55, 1.0, u), gains={"sky": 0.45, "stars": 0.8, "beacon": 1.0, "disk": 0.4, "haze": 0.4},
-                   bloom=0.045, glare=0.016, streak=0.05, streak_threshold=12.0, halation=0.07, vignette=0.34,
-                   punch=0.3, look_sat=1.3, saturation=1.1, white=(1.0, 0.94, 0.86))
+    red = smoothstep(0.35, 1.0, u)
+    P = CompParams(exposure=-0.3 - 0.7 * red,
+                   gains={"sky": 0.45 - 0.2 * red, "stars": 0.8 - 0.4 * red, "beacon": 1.0,
+                          "disk": 0.32 - 0.16 * red, "haze": 0.3},
+                   bloom=0.05, glare=0.016, streak=0.02, streak_threshold=10.0, streak_len=70.0, halation=0.08,
+                   vignette=0.36, punch=0.3, look_sat=1.0, saturation=0.8 + 0.25 * red,
+                   white=(1.0, 0.92 - 0.14 * red, 0.84 - 0.3 * red))
     return {"comp": P, "tracer": {"beacon": beacon}}

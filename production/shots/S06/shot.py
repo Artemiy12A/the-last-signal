@@ -44,7 +44,7 @@ def params(t, q):
     P = CompParams(exposure=0.9, gains={"sky": 0.7, "stars": 0.8, "disk": 1.0, "haze": 1.0, "ship_env": 0.9,
                                          "ship_key": 1.1, "ship_lamps": 1.0},
                    coc_px=c.coc_inf_px(), bloom=0.05, glare=0.02, streak=0.06, streak_threshold=14.0,
-                   halation=0.08, vignette=0.36, punch=0.3, look_sat=1.1, saturation=0.95, white=(1.0, 0.97, 0.93))
+                   halation=0.08, vignette=0.36, punch=0.3, look_sat=1.05, saturation=0.8, white=(1.0, 0.97, 0.93))
     bl = {"controls": controls(t, dish_el=DISH_EL), "probe": probe(D_BH, strength=1.0),
           "keys": [{"dir": list(map(float, HOLE)), "color": [1.0, 0.76, 0.5], "strength": 5.0, "angle": 3.0}]}
     return {"comp": P, "tracer": {}, "blender": bl}

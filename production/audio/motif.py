@@ -30,6 +30,7 @@ from tls import edl  # noqa: E402
 SIGNAL_ROOT = 146.832                          # D3: the received signal's root
 F_BEACON = SIGNAL_ROOT * edl.SIGNAL_STRETCH    # 660.7 Hz: the beacon's own root
 FM_RATIO = np.sqrt(2.0)                        # tritone modulator: inharmonic, "wrong"
+G_SIGNAL = 1.0 / edl.SIGNAL_STRETCH
 FM_INDEX = 1.8
 
 

@@ -159,7 +159,8 @@ class Mix:
             shape = np.minimum(1.0, tl / 0.01) * np.exp(-np.maximum(tl - 0.12, 0) / rel)
             j = min(n, i + m)
             duck_db[i:j] = np.minimum(duck_db[i:j], -depth * shape[: j - i])
-        curves = {s: np.ones(n) for s in STEMS}
+        ride = db(np.interp(t, [a for a, _ in elements.ACT_RIDE], [b for _, b in elements.ACT_RIDE]))
+        curves = {s: ride.copy() for s in STEMS}
         for s in ("drones", "interference"):
             curves[s] *= 10 ** (duck_db / 20)
         curves["music"] *= 10 ** (0.4 * duck_db / 20)
@@ -187,7 +188,7 @@ class Mix:
         end_w = np.ones(self.N)
         end_w[:s1] = 0.0
         final = np.ones(self.N)                             # the last pulse fades into the end
-        fe0, fe1 = n_of(edl.DURATION - 0.45), n_of(edl.DURATION - 0.015)
+        fe0, fe1 = n_of(edl.DURATION - 0.16), n_of(edl.DURATION - 0.015)   # the long pulse completes ~89.96
         final[fe0:fe1] = np.cos(0.5 * np.pi * np.arange(fe1 - fe0) / (fe1 - fe0)) ** 2
         final[fe1:] = 0.0
         title_w = np.ones(self.N)                           # the sting is gone before the last pulse

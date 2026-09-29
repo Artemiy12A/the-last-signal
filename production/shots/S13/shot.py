@@ -23,7 +23,7 @@ def cam_at(t):
 
 def params(t, q):
     u = SHOT.local(t)
-    P = CompParams(exposure=-2.3 - 0.5 * u, gains={"sky": 0.8, "stars": 1.6, "disk": 0.7}, bloom=0.06, glare=0.025, streak=0.08,
-                   halation=0.08, vignette=0.38, punch=0.22, look_sat=1.1, white=(1.0, 0.97, 0.95),
+    P = CompParams(exposure=-2.0 - 0.5 * u, gains={"sky": 1.0, "stars": 3.2, "disk": 0.55}, bloom=0.06, glare=0.025, streak=0.08,
+                   halation=0.08, vignette=0.38, punch=0.22, look_sat=1.2, saturation=1.05, white=(0.84, 0.95, 1.14),
                    interference=edl.interference(t), ca=2.0 + 3.0 * u)
-    return {"comp": P, "tracer": {"sky": {"doppler": 0.6}}}
+    return {"comp": P, "tracer": {"sky": {"doppler": 1.0}}}

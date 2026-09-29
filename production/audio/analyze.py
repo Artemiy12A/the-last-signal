@@ -198,9 +198,9 @@ def fig_stems(stems, path):
 def fig_motif(x, stems, path):
     """Zoomed views: the received motif, the beacon's morph into the signal, the last pulse."""
     views = [("signal stem: one motif (3 short + 1 long, x4.5)", stems.get("signal", x), 18.3, 24.8),
-             ("beacon stem: the ship's tick slows and sinks into the signal (S13-S15; red = flashes, xN = stretch)", stems.get("beacon", x), 69.5, 82.5),
-             ("mix: the last pulse, alone, into the end", x, 88.6, 90.0)]
-    fig, axes = plt.subplots(1, 3, figsize=(24, 6), facecolor=BG, gridspec_kw={"width_ratios": [6.5, 13, 3]})
+             ("beacon stem: the ship's tick slows and sinks into the signal (S14-S15; red = flashes, xN = stretch)", stems.get("beacon", x), 68.5, 82.5),
+             ("mix: the title restates the motif; the last long pulse alone into 90.0", x, 84.4, 90.0)]
+    fig, axes = plt.subplots(1, 3, figsize=(24, 6), facecolor=BG, gridspec_kw={"width_ratios": [6.5, 14, 5.6]})
     for ax, (title, sig, a, b) in zip(axes, views):
         style(ax)
         m = dsp.mono(sig[n_of(a):n_of(b)])
