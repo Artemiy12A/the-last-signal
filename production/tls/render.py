@@ -100,6 +100,8 @@ def tracer_scene(spec: FrameSpec, q: str, out_exr: Path) -> dict:
         "out": str(out_exr),
     }
     sc = deep_merge(sc, spec.tracer or {})
+    if os.environ.get("TLS_DISK"):      # lookdev: override disk parameters, e.g. TLS_DISK='{"n_phi": 28}'
+        sc["disk"].update(json.loads(os.environ["TLS_DISK"]))
     return sc
 
 

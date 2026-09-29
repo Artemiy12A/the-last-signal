@@ -41,8 +41,10 @@ SKY_ROT = sky_rotation()
 DISK = {
     "T_peak": 6500, "p_T": 4.0, "p_g": 2.0, "color_g": 1.0, "emit_gain": 3.0,
     "r_out": 22.0, "taper": 0.35, "h_over_r": 0.012, "kappa": 4.0,
-    "haze": 0.002, "haze_h": 0.1, "flow_period": 0.35, "n_phi": 16,
-    "clumps": 0.9, "lanes": 1.0, "arms": 0.45,
+    "haze": 0.002, "haze_h": 0.1, "flow_period": 0.35,
+    "clumps": 1.3, "lanes": 1.0, "arms": 0.45,
+    # rounder noise cells (26 per turn) and gentler ridges: turbulent gas, not brushed metal
+    "n_phi": 26, "filaments": 0.85,
 }
 SKY = {"gain": 4.0, "stars_gain": 3e-5, "star_max_radius": 0.006}
 
