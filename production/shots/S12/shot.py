@@ -37,4 +37,5 @@ def params(t, q):
                    white=(1.0, 0.95, 0.88))
     bl = {"controls": controls(t, engine=0.25), "probe": {"pos_bh": [float(x) for x in cam_at(t).pos_bh], "strength": 1.0},
           "keys": []}
-    return {"comp": P, "tracer": {"disk": {"octaves": 7, "haze": 0.0005}}   # the camera is inside the haze layer: keep the shadow black, "blender": bl}
+    # the camera is inside the haze layer: thin it so the shadow stays black
+    return {"comp": P, "tracer": {"disk": {"octaves": 7, "haze": 0.0005}}, "blender": bl}
