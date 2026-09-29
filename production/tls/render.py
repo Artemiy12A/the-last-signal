@@ -187,6 +187,11 @@ def _finish_frame(shot_id, spec, q, W, H, outdir, exrdir, png16, keep_exr) -> Pa
     if spec.black:
         enc = np.zeros((H, W, 3), np.float32)
         P = spec.comp
+        if P.sprites:   # a point of light on black still goes through the lens (bloom, halation, grade)
+            P2 = replace(P)
+            P2.sprites = [dict(sp, sigma_px=sp.get("sigma_px", 1.0) * W / 1920.0) for sp in P.sprites]
+            P2.streak_len *= W / 1920.0
+            enc = composite({"sky": enc}, P2, spec.t)
         if P.title:
             from comp.titles import draw_title
             enc = draw_title(enc, **P.title) * P.fade
