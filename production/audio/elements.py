@@ -53,6 +53,7 @@ SIGNAL_ACT = [(0.0, -10.5), (S("S01", 3.0), -10.0), (S("S02", 10.0), -12.0), (S(
 BEACON_DB = -34.0          # the ship's tick at nearness 1
 RING_ECHO_DELAY = 3.0      # s after the last beacon flash (cinema: physical ~16 M is ~6.6 s)
 WARP_BETA = 0.45           # sound time-dilation = (dtau/dt)^beta (cinema: physical beta = 1)
+SOUND_MAX_STRETCH = 10.0   # cap for the sound of a flash (x25 would put the root at 26 Hz)
 
 
 def signal_act(t: float) -> float:
@@ -62,14 +63,29 @@ def signal_act(t: float) -> float:
 LIGHTCURVE = Path(__file__).resolve().parents[1] / "shots" / "S15" / "lightcurve.json"
 
 
+def load_lightcurve(path: Path) -> np.ndarray:
+    """(n, 3) array [film_time, intensity, redshift g], sorted by time. Accepts a bare list of rows
+    or {"columns": [...], "rows": [...]} (columns matched by name: *time*, *intens*, *red*)."""
+    raw = json.loads(path.read_text())
+    if isinstance(raw, dict):
+        cols = [c.lower() for c in raw.get("columns", [])]
+        rows = np.array(raw["rows"], dtype=float)
+
+        def col(key, default):
+            return next((i for i, c in enumerate(cols) if key in c), default)
+        data = rows[:, [col("time", 0), col("intens", 1), col("red", 2)]]
+    else:
+        data = np.array(raw, dtype=float)
+    return data[np.argsort(data[:, 0])]
+
+
 def flashes_from_lightcurve(path: Path, t0: float, t1: float) -> list:
     """Beacon flashes measured from the tracer's S15 light curve: JSON [[film_time, intensity,
-    redshift], ...]. Each prominent peak (in log intensity) becomes a flash: onset at the half-rise
+    redshift], ...] or {"columns": [...time..., ...intens..., ...red...], "rows": [...]}. Each prominent peak (in log intensity) becomes a flash: onset at the half-rise
     point, stretch = 1/redshift, long/short from the flash's proper-time width, gain from the
     peak intensity (compressed, ^0.3, relative to the first S15 flash)."""
     from scipy.signal import find_peaks, peak_widths
-    data = np.array(json.loads(path.read_text()), dtype=float)
-    data = data[np.argsort(data[:, 0])]
+    data = load_lightcurve(path)
     m = (data[:, 0] >= t0 - 0.5) & (data[:, 0] < t1)
     t, inten, red = data[m, 0], np.maximum(data[m, 1], 0.0), np.clip(data[m, 2], 1e-3, 1.0)
     if len(t) < 5 or inten.max() <= 0:
@@ -182,7 +198,8 @@ def beacon_layer(mix) -> None:
         if p is None:                       # S01: the ship crosses the frame
             p = -0.65 + 1.3 * shot.local(f.t)
         seed = f"bcn{i}"
-        x, env = motif.voice(f.long, f.stretch, f.redshift, seed)
+        s_eff = min(f.stretch, SOUND_MAX_STRETCH)
+        x, env = motif.voice(f.long, s_eff, max(f.redshift, 1.0 / SOUND_MAX_STRETCH), seed)
         if near < 1.0:
             x = dsp.lp(x, 2200.0 + 14000.0 * near ** 2, order=2)
         if w > 0:
@@ -191,7 +208,7 @@ def beacon_layer(mix) -> None:
         y = y * np.array(dsp.pan_gains(p * (1 - w))) * 1.4142
         # level: the ship's small tick grows into the signal's size as it stretches
         lvl_db = (1 - w) * (BEACON_DB + 20 * np.log10(max(gain, 1e-3)) - 6.0 * (1 - near)) \
-            + w * (SIGNAL_DB + signal_act(f.t) + 1.0) + 20 * np.log10(max(f.gain, 1e-3))
+            + w * (SIGNAL_DB + signal_act(f.t) + 1.0) + 10 * np.log10(max(f.gain, 1e-3))   # gain^0.5
         mix.add("beacon", y, f.t, db(lvl_db),
                 sends={"hull": 0.22 * (1 - w) * near, "void": 0.05 + 0.25 * (1 - near) * (1 - w) + 0.6 * w})
         mix.event(f.t, "beacon_flash", long=f.long, stretch=round(f.stretch, 3), redshift=round(f.redshift, 3),
@@ -232,7 +249,7 @@ def interference_layer(mix) -> None:
     pos = np.sort(r.uniform(0, n - 1, k)).astype(int)
     keep = r.uniform(0, 1, k) < (1.5 + 160.0 * J[pos] ** 2) / lam_max
     pos = pos[keep]
-    amp = r.pareto(2.2, len(pos)) * r.choice([-1.0, 1.0], len(pos)) * db(-30) * (0.25 + J[pos])
+    amp = np.minimum(r.pareto(2.2, len(pos)), 5.0) * r.choice([-1.0, 1.0], len(pos)) * db(-30) * (0.25 + J[pos])
     pans = r.uniform(-1, 1, len(pos))
     cl = np.zeros((n, 2))
     gl = np.cos((pans + 1) * np.pi / 4)
@@ -585,7 +602,7 @@ def cue_braam(mix, cue) -> None:
     # impact layer on the attack
     a, sub, rumble = hit_layers(1.0, body_f=D2, sub_f=D1 * 1.25, tail=2.5, seed="braamhit")
     mix.add("fx", dsp.widen(a, 0.4, "bh"), cue.t, db(-10.0) * lvl, sends={"hall": 0.4})
-    mix.add("fx", dsp.widen(rumble, 1.0, "bhr"), cue.t, db(-6.0) * lvl, sends={"hall": 0.3})
+    mix.add("fx", dsp.widen(rumble, 1.0, "bhr"), cue.t, db(-8.0) * lvl, sends={"hall": 0.3})
     mix.duck_at(cue.t, 9.0 * lvl, 2.8)
     mix.hits.append(cue.t)
     # the awe after the blast: a vast, slow D2/A2/D3/E3 chord that holds the reveal
@@ -616,7 +633,7 @@ def cue_sub_drop(mix, cue) -> None:
     ph = dsp.phase(f)
     a = (1 - np.exp(-t / 0.008)) * np.exp(-t / 2.4) * dsp.fade(n, 0, n_of(1.0))
     x = (np.sin(ph) + db(-12) * np.sin(2 * ph) + db(-18) * np.sin(3 * ph)) * a
-    mix.add("fx", x, cue.t, db(-9.0) * lvl)
+    mix.add("fx", x, cue.t, db(-11.0) * lvl)
 
 
 # ============================================================================ Act III
@@ -786,14 +803,20 @@ def cue_time_stretch(mix, cue) -> None:
     t = t0 + tt(n)
     ts, gv = ctrl_curve(ship_rate, t0, t1, 500)
     g = to_samples(ts, gv, t0, n)
+    a = dsp.smoothstep((t - t0 - 0.2) / 2.0) * np.exp(-np.maximum(t - s15 - 1.0, 0) / 1.4)
+    fl, measured = beacon_flashes()
+    if measured:                                   # S15 follows the tracer's measured redshift
+        lc = load_lightcurve(LIGHTCURVE)
+        after = t >= s15
+        g = np.where(after, np.interp(t, lc[:, 0], np.clip(lc[:, 2], 1e-3, 1.0)), g)
+        a = np.where(after, dsp.smoothstep((t - s15) / 0.4) * dsp.smoothstep((t1 - t) / 0.3) * 0.8,
+                     a * dsp.smoothstep((s15 - t) / 0.12))
     f = motif.F_BEACON * g
     ph = dsp.phase(f)
     tone = np.sin(ph + 0.6 * np.sin(motif.FM_RATIO * ph)) + 0.4 * np.sin((motif.FM_RATIO - 1) * ph)
-    a = dsp.smoothstep((t - t0 - 0.2) / 2.0) * np.exp(-np.maximum(t - s15 - 1.0, 0) / 1.4) * (f > 30.0)
-    tone = dsp.hp(tone * a, 25.0, 2)
+    tone = dsp.hp(tone * a * (f > 30.0), 25.0, 2)
     mix.add("beacon", dsp.widen(tone, 0.8, "ghost"), t0, db(SIGNAL_DB - 12), sends={"void": 0.7})
     # the ring echo of the last beacon flash (a measured S15 light curve already contains it)
-    fl, measured = beacon_flashes()
     if measured:
         return_echo = False
     else:
@@ -811,7 +834,7 @@ def cue_time_stretch(mix, cue) -> None:
     n = n_of(t1 - tf0)
     tl = tt(n)
     u = tl / (t1 - tf0)
-    grow = dsp.curve(n, [(0, -70), (1.0, -36), (3.0, -30), (t1 - tf0 - 2.5, -19), (t1 - tf0, -9)], kind="db")
+    grow = dsp.curve(n, [(0, -70), (1.0, -36), (3.0, -30), (t1 - tf0 - 2.5, -19), (t1 - tf0, -10)], kind="db")
     # descending Shepard (endless fall), spectral window sinking 420 -> 140 Hz
     y = np.zeros(n)
     cen = np.log2(420.0) + np.log2(140.0 / 420.0) * u
@@ -819,7 +842,7 @@ def cue_time_stretch(mix, cue) -> None:
         lf = np.log2(25.0) + ((k - tl / 6.0) % 8.0)
         a = np.exp(-0.5 * ((lf - cen) / 1.2) ** 2)
         y += a * np.sin(dsp.phase(2.0 ** lf))
-    mix.add("music", dsp.widen(y * grow * 0.7, 0.8, "fallshep"), tf0, post=True, sends={"void": 0.25})
+    mix.add("music", dsp.widen(y * grow * 0.45, 0.8, "fallshep"), tf0, post=True, sends={"void": 0.25})
     # redshift wash: band noise whose centre sinks 2.6 kHz -> 320 Hz (the light going red)
     r = dsp.rng("wash")
     wash = dsp.tv_filter(dsp.colored(n, r, -3.0), 2600.0 * (320.0 / 2600.0) ** u, 0.8, "bp", 128)
@@ -836,11 +859,11 @@ def cue_time_stretch(mix, cue) -> None:
     roar = dsp.tv_filter(roar, 600.0 * (140.0 / 600.0) ** u, 0.9, "lp", 128)
     roar /= np.sqrt(np.mean(roar ** 2)) + 1e-9
     roar = np.tanh(roar / 2.5) * 2.5
-    mix.add("drones", dsp.widen(roar * grow * db(-6), 0.9, "roar"), tf0, post=True)
+    mix.add("drones", dsp.widen(roar * grow * db(-7.5), 0.9, "roar"), tf0, post=True)
     # sinking sub D1 -> A0 (27.5 Hz) with 2nd harmonic
     fs = D1 * (27.5 / D1) ** u
     ph = dsp.phase(fs)
-    sub = (np.sin(ph) + 0.5 * np.sin(2 * ph)) * grow * db(-3)
+    sub = (np.sin(ph) + 0.5 * np.sin(2 * ph)) * grow * db(0)
     mix.add("drones", sub, tf0, post=True)
 
 
@@ -863,14 +886,14 @@ def cue_title_sting(mix, cue) -> None:
     env = (1 - np.exp(-t / 0.25)) * np.exp(-t / 1.6)
     bloom = np.zeros((n, 2))
     rb = dsp.rng("bloom")
-    for f, amp in ((D2, 0.8), (D3, 0.7), (A3, 0.6), (2 * D3, 0.4), (2 * A3, 0.2)):
+    for f, amp in ((D2, 0.35), (D3, 0.8), (A3, 0.65), (2 * D3, 0.45), (2 * A3, 0.25)):
         for c in range(2):
             ph = dsp.phase(f * (1 + (-1) ** c * 0.0007), n, rb.uniform(0, dsp.TWO_PI))
             idx = 1.2 * np.exp(-t / 0.8) + 0.3
             bloom[:, c] += amp * np.sin(ph + idx * np.sin(motif.FM_RATIO * ph))
     subd = abs_sine(D1, cue.t, n) * (1 - np.exp(-t / 0.01)) * np.exp(-t / 1.3)
     bloom = 0.8 * np.tanh(bloom * env[:, None] * 0.35 / 0.8) + subd[:, None] * 0.25
-    mix.add("music", bloom, cue.t, db(2.0) * lvl, post=True, sends={"void": 0.45})
+    mix.add("music", bloom, cue.t, db(0.0) * lvl, post=True, sends={"void": 0.45})
     mix.tail_end(cue.t + tail)
     mix.hits.append(cue.t)
 

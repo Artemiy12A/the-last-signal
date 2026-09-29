@@ -316,9 +316,17 @@ def setup_review_output(path_jpg, quality=88, exposure=0.0, look='AgX - Medium H
 
 
 def render(path=None, animation=False):
+    """Render the current frame (or the frame range if animation=True). '#' in a still's path is
+    replaced by the zero-padded current frame number."""
     scene = bpy.context.scene
     if path:
         scene.render.filepath = str(path)
+    if not animation and "#" in scene.render.filepath:
+        base = scene.render.filepath
+        scene.render.filepath = scene.render.frame_path(frame=scene.frame_current)
+        bpy.ops.render.render(write_still=True)
+        scene.render.filepath = base
+        return
     bpy.ops.render.render(write_still=not animation, animation=animation)
 
 

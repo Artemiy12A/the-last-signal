@@ -494,7 +494,7 @@ int main(int argc, char** argv) {
         DP(r_in); DP(r_out); DP(h_over_r); DP(flare); DP(T_peak); DP(kappa); DP(emit_gain); DP(p_T); DP(p_g);
         DP(color_g); DP(flow_period); DP(k_ln); DP(n_phi); DP(z_cells); DP(octaves); DP(turb); DP(warp);
         DP(arms); DP(hot_spots); DP(plunge); DP(haze); DP(haze_h); DP(haze_gain); DP(inner_soft); DP(rim); DP(seed);
-        DP(sigma_slope); DP(taper); DP(temp_var); DP(lanes); DP(filaments); DP(fil_sharp); DP(fil_scale); DP(floor_dens);
+        DP(sigma_slope); DP(taper); DP(temp_var); DP(lanes); DP(filaments); DP(fil_sharp); DP(fil_scale); DP(floor_dens); DP(clumps);
 #undef DP
     }
     D.init(S.disk, &bb);

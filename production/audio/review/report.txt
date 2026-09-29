@@ -1,46 +1,47 @@
 THE LAST SIGNAL — soundtrack analysis
 ========================================================================
 file: 48000 Hz, 2 ch, PCM_24, 4320000 frames = 90.000000 s (OK)
-integrated loudness: -14.08 LUFS (pyloudnorm cross-check -14.12)   target -14 ±1
+integrated loudness: -14.05 LUFS (pyloudnorm cross-check -14.09)   target -14 ±1
 true peak (4x): -1.30 dBTP   sample peak -1.31 dBFS   target <= -1 dBTP
-loudness range: 18.5 LU
-max short-term: -8.91 LUFS at 50.00 s   max momentary: -8.13 LUFS at 85.50 s
-short-term peaks: -8.9 @ 50.0s, -13.4 @ 59.7s, -11.6 @ 71.2s, -10.2 @ 81.0s, -9.3 @ 86.0s
+loudness range: 17.8 LU
+beacon flashes: 165 (S15 from production/shots/S15/lightcurve.json)
+max short-term: -8.64 LUFS at 50.50 s   max momentary: -8.03 LUFS at 51.80 s
+short-term peaks: -8.6 @ 50.5s, -12.9 @ 59.7s, -11.1 @ 71.2s, -11.0 @ 81.0s, -9.8 @ 86.0s
 
 silence / edges
   82.500-84.500 s: 96000 samples, 0 non-zero -> TRUE DIGITAL SILENCE
     last non-zero before: 82.499979 s (cut at 82.500)
     first non-zero after: 84.500000 s (sting at 84.500)
   last non-zero sample: 89.9850 s; final sample value 0.0e+00
-  last 300 ms rms: -23.6 dBFS (the last pulse dying into the end)
+  last 300 ms rms: -23.1 dBFS (the last pulse dying into the end)
 
 alignment against edl.py (onset = 1 ms envelope passes baseline + 30 % (hits) / 10 % (pulses) of the rise)
   low_hit      EDL  33.500  onset  33.5013  offset   +1.3 ms
-  braam        EDL  48.500  onset  48.5011  offset   +1.1 ms
+  braam        EDL  48.500  onset  48.5010  offset   +1.0 ms
   low_hit      EDL  60.000  onset  60.0010  offset   +1.0 ms
   title_sting  EDL  84.500  onset  84.5010  offset   +1.0 ms
   signal pulses: 30 onsets, offset min -0.1 / max +7.9 ms
-  beacon flashes: 135 audible onsets, offset min -12.3 / max +16.3 ms
+  beacon flashes: 141 audible onsets, offset min -13.6 / max +5.3 ms
 
 per shot:   rms dBFS | short-term LUFS mean / max (momentary if < 3 s) | sub 20-80 Hz dBFS | 150-1k dBFS
-  BLK0     0.0-  3.0    -30.8 |  -29.5 /  -29.0 |   -39.7 |   -35.0   black open
-  S01      3.0- 10.0    -31.4 |  -31.0 /  -27.5 |   -37.4 |   -36.6   The Deep
-  S02     10.0- 15.5    -28.8 |  -27.5 /  -26.3 |   -37.2 |   -33.2   Hull
-  S03     15.5- 21.5    -29.5 |  -28.2 /  -24.6 |   -36.3 |   -35.6   Listening
-  S04     21.5- 28.0    -27.1 |  -26.5 /  -23.8 |   -32.0 |   -33.6   Wrong stars
-  S05     28.0- 33.5    -20.3 |  -19.7 /  -15.8 |   -25.6 |   -26.4   The pull
-  S06     33.5- 37.0    -17.8 |  -20.1 /  -16.4 |   -19.6 |   -30.2   Glimpse: light
-  S07     37.0- 41.0    -21.0 |  -19.8 /  -17.7 |   -29.6 |   -25.7   Glimpse: edge
-  S08     41.0- 46.0    -13.1 |  -19.5 /  -17.3 |   -21.1 |   -27.9   Debris
-  S09     46.0- 48.5    -21.3 |  -19.0 /  -11.5 |   -23.9 |   -31.9   Breath
-  S10     48.5- 60.0    -12.8 |  -13.5 /   -8.9 |   -17.8 |   -20.3   The reveal
-  S11     60.0- 65.5    -16.0 |  -17.3 /  -13.8 |   -19.5 |   -24.8   Scale
-  S12     65.5- 69.5    -15.7 |  -14.0 /  -13.2 |   -20.9 |   -22.5   Under the arch
-  S13     69.5- 72.5    -10.8 |  -12.4 /  -11.6 |   -18.5 |   -23.5   Interference
-  S14     72.5- 76.0    -15.3 |  -14.5 /  -12.7 |   -19.6 |   -22.3   Time
-  S15     76.0- 82.5    -12.7 |  -13.0 /  -10.2 |   -20.2 |   -18.7   The fall
+  BLK0     0.0-  3.0    -30.1 |  -28.8 /  -28.3 |   -39.0 |   -34.4   black open
+  S01      3.0- 10.0    -30.7 |  -30.3 /  -26.9 |   -36.8 |   -35.9   The Deep
+  S02     10.0- 15.5    -28.1 |  -26.8 /  -25.6 |   -36.6 |   -32.5   Hull
+  S03     15.5- 21.5    -28.9 |  -27.6 /  -24.0 |   -35.6 |   -34.9   Listening
+  S04     21.5- 28.0    -26.5 |  -25.8 /  -23.2 |   -31.3 |   -33.0   Wrong stars
+  S05     28.0- 33.5    -19.6 |  -19.1 /  -15.3 |   -25.0 |   -25.8   The pull
+  S06     33.5- 37.0    -17.3 |  -19.5 /  -15.8 |   -19.1 |   -29.6   Glimpse: light
+  S07     37.0- 41.0    -20.4 |  -19.1 /  -17.1 |   -29.0 |   -25.1   Glimpse: edge
+  S08     41.0- 46.0    -12.6 |  -18.9 /  -16.7 |   -20.6 |   -27.3   Debris
+  S09     46.0- 48.5    -20.7 |  -18.6 /  -11.3 |   -23.5 |   -31.3   Breath
+  S10     48.5- 60.0    -12.6 |  -13.1 /   -8.6 |   -18.1 |   -19.9   The reveal
+  S11     60.0- 65.5    -15.6 |  -16.8 /  -13.3 |   -19.1 |   -24.3   Scale
+  S12     65.5- 69.5    -15.2 |  -13.5 /  -12.6 |   -20.4 |   -22.0   Under the arch
+  S13     69.5- 72.5    -10.3 |  -11.9 /  -11.1 |   -18.0 |   -23.0   Interference
+  S14     72.5- 76.0    -14.7 |  -14.1 /  -12.2 |   -19.0 |   -21.7   Time
+  S15     76.0- 82.5    -12.8 |  -13.5 /  -11.0 |   -17.6 |   -19.6   The fall
   BLK1    82.5- 84.5  digital silence (short-term windows straddle it)
-  TITLE   84.5- 89.0    -11.5 |  -11.3 /   -9.3 |   -16.0 |   -18.4   THE LAST SIGNAL
-  BTN     89.0- 90.0    -17.9 |  -16.4 /  -14.6 |   -25.9 |   -21.5   button
+  TITLE   84.5- 89.0    -12.1 |  -11.9 /   -9.8 |   -17.6 |   -18.4   THE LAST SIGNAL
+  BTN     89.0- 90.0    -17.3 |  -15.9 /  -14.0 |   -25.3 |   -20.9   button
 
-render: {"duration_s": 90.0, "sample_rate": 48000, "bits": 24, "integrated_lufs": -14.08, "true_peak_dbtp": -1.3, "lra_lu": 18.51, "master_gain_db": 8.61, "stem_scale": 0.4149, "comp_max_gr_db": 4.62, "lim_max_gr_db": 7.14, "iterations": 6, "silence": [82.5, 84.5], "render_seconds": 89.6, "recordings": true}
+render: {"duration_s": 90.0, "sample_rate": 48000, "bits": 24, "integrated_lufs": -14.05, "true_peak_dbtp": -1.3, "lra_lu": 17.81, "master_gain_db": 9.24, "stem_scale": 0.5425, "comp_max_gr_db": 3.94, "lim_max_gr_db": 6.49, "iterations": 6, "silence": [82.5, 84.5], "render_seconds": 89.3, "recordings": true}

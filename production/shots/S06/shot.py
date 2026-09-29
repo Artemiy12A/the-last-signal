@@ -25,10 +25,10 @@ def ship_at(t):
 
 def params(t, q):
     c = cam_at(t)
-    P = CompParams(exposure=0.0, gains={"sky": 0.8, "stars": 1.0, "disk": 1.0, "ship_env": 1.2, "ship_key": 1.0,
+    P = CompParams(exposure=-0.4, gains={"sky": 0.8, "stars": 1.0, "disk": 1.0, "ship_env": 0.8, "ship_key": 1.0,
                                          "ship_lamps": 1.0},
                    coc_px=c.coc_inf_px(), bloom=0.045, streak=0.07, streak_threshold=12.0, halation=0.06,
                    vignette=0.34, punch=0.16, white=(1.0, 0.96, 0.9))
     bl = {"controls": controls(t), "probe": probe(120.0, strength=1.0),
-          "keys": [warm_key_from_hole(strength=1.2, angle=3.0)]}
+          "keys": [warm_key_from_hole(strength=4.0, color=(1.0, 0.74, 0.44), angle=1.2, dir_=(0.35, 1.0, 0.3))]}
     return {"comp": P, "tracer": {}, "blender": bl}

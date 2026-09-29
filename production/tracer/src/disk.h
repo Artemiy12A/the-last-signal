@@ -50,6 +50,7 @@ struct DiskParams {
     double fil_sharp = 2.5;   // ridge sharpness
     double fil_scale = 1.6;   // filament frequency relative to the base noise
     double floor_dens = 0.25; // diffuse density under the filaments
+    double clumps = 0.0;      // large-scale log-normal modulation (clumps, gaps)
     uint32_t seed = 1234;
     // derived
     double r_isco = 6, r_h = 2;
@@ -198,7 +199,7 @@ public:
         // stretches features by more than ~ (d ln Omega / d ln r) * 2 pi * flow_period
         double Tloc = P.flow_period * 2 * M_PI / std::max(Om, 1e-6);
         double lay_t = time / Tloc;
-        float dens_turb = 0, temp_turb = 0, hot = 0, lane = 0, fil = 0;
+        float dens_turb = 0, temp_turb = 0, hot = 0, lane = 0, fil = 0, big = 0;
         float fz = float(zeta * P.z_cells * 0.5);
         float fp = float(footprint / r * P.k_ln);          // footprint in octave-0 radial cells
         for (int L = 0; L < 2; ++L) {
@@ -229,6 +230,8 @@ public:
             float rid = 1.f - std::fabs(ln) * 4.f;
             dens_turb += wgt * n;
             fil += wgt * rf;
+            if (P.clumps > 0)
+                big += wgt * fbm_py(fx * 0.25f + 71.f, fy * 0.25f, fz * 0.3f, std::max(1, P.n_phi / 4), 2, fp * 0.25f, sd ^ 0xC1C1u);
             temp_turb += wgt * n2;
             hot += wgt * std::max(0.f, (hs - 0.2f) / 0.25f);
             lane += wgt * std::max(0.f, rid);
@@ -253,7 +256,8 @@ public:
         double vert = std::exp(-0.5 * zl * zl);
         double lognorm = std::exp(P.turb * dens_turb * 2.0 - 0.5 * P.turb * P.turb * 0.2);
         double structure = P.floor_dens + P.filaments * double(fil) * double(fil) * 4.0;
-        double rho = (sigma * lognorm * structure + plunge) * vert;
+        double clump = P.clumps > 0 ? std::exp(P.clumps * 2.0 * double(big) - 0.5 * P.clumps * P.clumps * 0.3) : 1.0;
+        double rho = (sigma * lognorm * structure * clump + plunge) * vert;
         if (rho > 1e-7) {
             double T = P.T_peak * Tn * (1.0 + P.temp_var * 2.0 * temp_turb + 0.2 * P.hot_spots * hot);
             // lanes: cold gas absorbs more and glows less

@@ -218,11 +218,15 @@ def composite(layers: dict, P: CompParams, t: float = 0.0) -> np.ndarray:
     if "ship" in layers:
         s = layers["ship"]
         a = s[..., 3:4]
-        if all(k in layers for k in ("ship_env", "ship_key", "ship_lamps")):
-            rgb = (layers["ship_env"] * _gain(G.get("ship_env", 1.0)) + layers["ship_key"] * _gain(G.get("ship_key", 1.0))
-                   + layers["ship_lamps"] * _gain(G.get("ship_lamps", 1.0)))
-        else:
-            rgb = s[..., :3]
+        # the denoised Combined is the base; light groups (not denoised) only carry the regrade deltas,
+        # so noise appears only where a group is pushed away from 1
+        rgb = s[..., :3].copy()
+        for g in ("env", "key", "lamps"):
+            k = f"ship_{g}"
+            gv = _gain(G.get(k, 1.0))
+            if k in layers and np.any(np.asarray(gv) != 1.0):
+                rgb = rgb + layers[k] * (np.asarray(gv, np.float32) - 1.0)
+        rgb = np.maximum(rgb, 0.0)
         img = img * (1.0 - a) + rgb * _gain(G.get("ship", 1.0))
     if "ship_emit" in layers:
         img = img + layers["ship_emit"] * _gain(G.get("ship_emit", 1.0))

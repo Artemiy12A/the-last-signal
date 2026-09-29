@@ -302,12 +302,18 @@ def debris(prop: dict, times: list):
         bpy.context.scene.collection.children.link(col)
         meshes = _rock_meshes()
         rng = random.Random(seed)
-        for i in range(n):
+        nb = int(prop.get("boulders", 12))
+        for i in range(n + nb):
             o = bpy.data.objects.new(f"TLS_rock{i}", meshes[i % len(meshes)])
-            size = math.exp(rng.uniform(math.log(0.08), math.log(2.6)))
-            o["size"] = size
-            o["p0"] = (rng.uniform(*prop.get("x", (-44.0, -12.0))), rng.uniform(-120.0, 120.0),
+            if i < n:
+                size = math.exp(rng.uniform(math.log(0.06), math.log(3.0)))
+                pos = (rng.uniform(*prop.get("x", (-44.0, -12.0))), rng.uniform(-120.0, 120.0),
                        rng.uniform(*prop.get("z", (-14.0, 12.0))))
+            else:  # big boulders beyond the ship, for depth
+                size = rng.uniform(4.0, 11.0)
+                pos = (rng.uniform(25.0, 90.0), rng.uniform(-120.0, 120.0), rng.uniform(-30.0, 30.0))
+            o["size"] = size
+            o["p0"] = pos
             o["axis"] = (rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1))
             o["spin"] = rng.uniform(-1.2, 1.2) / max(size, 0.3)
             col.objects.link(o)
@@ -326,13 +332,13 @@ def debris(prop: dict, times: list):
             nt.nodes.remove(nt.nodes.get("Principled BSDF"))
             pv = nt.nodes.new("ShaderNodeVolumePrincipled")
             pv.inputs["Color"].default_value = (0.8, 0.74, 0.66, 1)
-            pv.inputs["Anisotropy"].default_value = 0.65
+            pv.inputs["Anisotropy"].default_value = 0.72
             nz = nt.nodes.new("ShaderNodeTexNoise")
-            nz.inputs["Scale"].default_value = 0.035
+            nz.inputs["Scale"].default_value = float(prop.get("dust_scale", 0.02))
             nz.inputs["Detail"].default_value = 4.0
             mr = nt.nodes.new("ShaderNodeMapRange")
-            mr.inputs["From Min"].default_value = 0.42
-            mr.inputs["From Max"].default_value = 0.72
+            mr.inputs["From Min"].default_value = 0.46
+            mr.inputs["From Max"].default_value = 0.78
             mr.inputs["To Min"].default_value = 0.0
             mr.inputs["To Max"].default_value = float(prop.get("dust_density", 0.004))
             nt.links.new(nz.outputs["Fac"], mr.inputs["Value"])

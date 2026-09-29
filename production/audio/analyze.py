@@ -28,6 +28,9 @@ import dsp  # noqa: E402
 import loudness  # noqa: E402
 from dsp import SR, n_of  # noqa: E402
 from motif import edl  # noqa: E402
+import elements  # noqa: E402
+
+FLASHES, MEASURED = elements.beacon_flashes()   # EDL flashes, S15 from the tracer light curve if present
 
 CACHE = HERE.parent / "cache" / "audio"
 REVIEW = HERE / "review"
@@ -93,7 +96,7 @@ def fig_spectrogram(x, path):
     cue_marks(ax, 3000)
     for p in edl.signal_pulses():
         ax.plot([p.t, p.t], [11000, 14500 if p.long else 12500], color=C_SIG, lw=1.4)
-    for p in edl.beacon_flashes():
+    for p in FLASHES:
         ax.plot([p.t, p.t], [22, 26 if p.long else 24], color=C_BCN, lw=0.8)
     fig.tight_layout()
     fig.savefig(path, dpi=85, facecolor=BG)
@@ -195,7 +198,7 @@ def fig_stems(stems, path):
 def fig_motif(x, stems, path):
     """Zoomed views: the received motif, the beacon's morph into the signal, the last pulse."""
     views = [("signal stem: one motif (3 short + 1 long, x4.5)", stems.get("signal", x), 18.3, 24.8),
-             ("beacon stem: the ship's tick slows and sinks into the signal (S13-S15)", stems.get("beacon", x), 69.5, 82.5),
+             ("beacon stem: the ship's tick slows and sinks into the signal (S13-S15; red = flashes, xN = stretch)", stems.get("beacon", x), 69.5, 82.5),
              ("mix: the last pulse, alone, into the end", x, 88.6, 90.0)]
     fig, axes = plt.subplots(1, 3, figsize=(24, 6), facecolor=BG, gridspec_kw={"width_ratios": [6.5, 13, 3]})
     for ax, (title, sig, a, b) in zip(axes, views):
@@ -212,7 +215,7 @@ def fig_motif(x, stems, path):
         for p in edl.signal_pulses():
             if a <= p.t <= b:
                 ax.axvline(p.t, color=C_SIG, lw=0.8, alpha=0.8)
-        for p in edl.beacon_flashes():
+        for p in FLASHES:
             if a <= p.t <= b:
                 ax.axvline(p.t, color=C_BCN, lw=0.6, alpha=0.6)
                 if p.stretch > 1.05:
@@ -258,6 +261,7 @@ def report(x, stems, meta, integ, tp, lra_v, path):
     P(f"integrated loudness: {integ:.2f} LUFS (pyloudnorm cross-check {pl:.2f})   target -14 ±1")
     P(f"true peak (4x): {tp:.2f} dBTP   sample peak {dsp.to_db(np.abs(x).max()):.2f} dBFS   target <= -1 dBTP")
     P(f"loudness range: {lra_v:.1f} LU")
+    P(f"beacon flashes: {len(FLASHES)} ({'S15 from ' + str(elements.LIGHTCURVE.relative_to(HERE.parents[1])) if MEASURED else 'all from edl.beacon_flashes()'})")
     ts, ls = loudness.short_term(x)
     tm, lm = loudness.momentary(x)
     k = int(np.argmax(ls))
@@ -305,7 +309,7 @@ def report(x, stems, meta, integ, tp, lra_v, path):
     bc = stems.get("beacon")
     if bc is not None:
         offs = []
-        for p in edl.beacon_flashes():
+        for p in FLASHES:
             if abs(dsp.mono(bc[n_of(p.t):n_of(p.t) + 480])).max() > 1e-4:
                 o = onset_near(bc, p.t, pre=0.05, post=0.05, frac=0.1)
                 if o is not None:

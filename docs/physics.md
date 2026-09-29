@@ -811,6 +811,27 @@ time delays and the direction of beaming are all exact.
 
 ---
 
+### 12.1 As built (production/, 2026-09-29)
+
+What the renderer actually does, and where it departs:
+
+| # | choice in the code | physics | why |
+|---|---|---|---|
+| P1 | spin a = 0.8, camera at 86° for the approach and reveal, 88.8–89.5° for grazing shots | — | §11 recommendation; near-edge-on gives the iconic lensed arch |
+| P2 | emitted peak 6500 K (Page–Thorne profile, T ∝ F^1/4, warm floor near the ISCO); white balance 6500 K | real disks peak at 10^4.5–10^5.5 K | visible-light palette: white-gold inside, amber outside |
+| P3 | observed colour temperature = T·g (physical); intensity ∝ (T/T_peak)^4 · g^2 | bolometric g^4 | beaming kept readable (≈7–12× contrast instead of 150×+) |
+| P4 | turbulence advected at Keplerian Ω(r), two flow layers reset every 0.35 local orbits and cross-faded | real flow never resets | avoids the "vinyl record" over-shear; per-radius reset (Neyret 2003) |
+| P5 | disk clock: 1.4 M per film second (≈25 s per ISCO orbit on screen) | for a 10^6–10^9 M☉ hole an ISCO orbit takes minutes to days | the disk must visibly live but stay stately |
+| P6 | S15 infall: exact timelike geodesic in Kerr–Schild coordinates; the camera clock runs at 5 M per film second, decoupled from the disk clock | one clock for everything | the fall must happen inside 6.5 s of screen time; invisible to an audience |
+| P7 | beacon = Gaussian emissive blob σ = 0.08 M (much larger than a ship) with pulses in proper time; redshift and delays from the ray tracing itself | a point source | readable glow at 55 M; lensed images, light-travel delays and stretching are physical |
+| P8 | back-traced rays below the prograde photon orbit and still falling are called captured | exact (no turning point) | avoids the ingoing-Kerr–Schild horizon pile-up |
+| P9 | star brightness 10^(−0.4·0.8·V) (magnitudes compressed by 0.8) | 10^(−0.4·V) | a dense natural-looking field on a phone screen |
+| P10 | sky Doppler/gravitational shift applied as intensity g^(4·s), s = 1 (0.6 in S13) | g^4 | S13's aberration is physical; the brightening is tempered |
+| P11 | ship and debris rendered in flat space (Blender) and lit by an equirect probe traced from the ship's position | the ship sits in curved space | at ship scale the metric is flat; lighting keeps the lensed disk light |
+| P12 | LSV-7 ion thrusters sit behind the reactor on its unshielded side; radiators only roughly inside the shield's shadow cone | a real design puts them in the shield's shadow | silhouette and readability |
+| P13 | the xenon strobe is far brighter than a real beacon | real beacons are faint | it lights the foil and reads at distance |
+| P14 | ion plumes glow visibly | nearly invisible in reality | a thread of blue engine light sells scale in S11/S12 |
+
 ## 13. References
 
 1. O. James, E. von Tunzelmann, P. Franklin, K. S. Thorne, "Gravitational lensing by spinning black holes in astrophysics, and in the movie *Interstellar*", CQG 32, 065001 (2015). [arXiv:1502.03808](https://arxiv.org/abs/1502.03808), [doi:10.1088/0264-9381/32/6/065001](https://doi.org/10.1088/0264-9381/32/6/065001) ([Consensus](https://consensus.app/papers/details/97ae50e7dc0651bda0f0db622bb3040e/?utm_source=claude_desktop))

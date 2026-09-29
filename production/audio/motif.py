@@ -99,7 +99,7 @@ def radio(x: np.ndarray, env: np.ndarray, seed: str, rough: float = 1.0) -> np.n
     cr = np.zeros(n)
     k = r.poisson(14.0 * dur * rough)
     pos = r.integers(0, n, k)
-    cr[pos] = r.pareto(2.5, k) * r.choice([-1.0, 1.0], k) * 0.18
+    cr[pos] = np.minimum(r.pareto(2.5, k), 5.0) * r.choice([-1.0, 1.0], k) * 0.18
     cr = dsp.bp(cr, 900.0, 5200.0, order=2) * (0.25 + env_s)
     # carrier whistle (heterodyne of an off-channel carrier), slowly drifting
     fw = r.uniform(1350.0, 2250.0) * (1.0 + 0.025 * np.sin(dsp.TWO_PI * r.uniform(0.2, 0.6) * t))
