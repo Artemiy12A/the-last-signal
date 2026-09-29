@@ -133,7 +133,7 @@ def signal_pulses() -> list[Pulse]:
 
 T_DILATE = 72.5     # time dilation becomes perceptible (S14)
 T_FALL = 76.0       # S15: from here the tracer's measured light curve is the ship's clock
-G_FALL0 = 0.833     # beacon redshift g at the start of S15 (ship at r ~ 10.5 M), from tls.lightcurve
+G_FALL0_DEFAULT = 0.83   # beacon redshift g at the start of S15 (ship at r ~ 10.5 M) if not yet measured
 
 
 def _fall_rate_table():
@@ -153,17 +153,16 @@ def _fall_rate_table():
         for i, t_ in enumerate(tt):
             w = [p_[1] for p_ in pts if abs(p_[0] - t_) <= 0.25]
             gg.append(sum(w) / len(w))
-        scale = G_FALL0 / gg[0]
         gs = []
         for t_ in ts:
             if t_ <= tt[-1]:
                 j = max(0, min(len(tt) - 2, next((k for k in range(len(tt) - 1) if tt[k + 1] >= t_), len(tt) - 2)))
                 u = (t_ - tt[j]) / max(tt[j + 1] - tt[j], 1e-9)
-                gs.append(scale * (gg[j] + u * (gg[j + 1] - gg[j])))
+                gs.append(gg[j] + u * (gg[j + 1] - gg[j]))
             else:   # beyond the measurement: keep sinking with the horizon's e-folding
                 gs.append(gs[-1] * math.exp(-0.01 / 1.2))
     except (OSError, KeyError, ValueError, IndexError):
-        gs = [G_FALL0 * math.exp(-(t_ - T_FALL) / 3.2) for t_ in ts]
+        gs = [G_FALL0_DEFAULT * math.exp(-(t_ - T_FALL) / 3.2) for t_ in ts]
     return ts, [max(g, 1e-3) for g in gs]
 
 
@@ -175,11 +174,11 @@ def ship_rate(t: float) -> float:
     global _FALL
     if t <= T_DILATE:
         return 1.0
-    if t <= T_FALL:   # S14: the onset, easing from 1 to the value the fall starts with
-        u = (t - T_DILATE) / (T_FALL - T_DILATE)
-        return 1.0 - (1.0 - G_FALL0) * u * u * (3 - 2 * u)
     if _FALL is None:
         _FALL = _fall_rate_table()
+    if t <= T_FALL:   # S14: the onset, easing from 1 to the value the measured fall starts with
+        u = (t - T_DILATE) / (T_FALL - T_DILATE)
+        return 1.0 - (1.0 - _FALL[1][0]) * u * u * (3 - 2 * u)
     ts, gs = _FALL
     i = min(int((t - T_FALL) / 0.01), len(ts) - 2)
     u = (t - ts[i]) / 0.01

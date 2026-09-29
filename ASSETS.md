@@ -30,6 +30,11 @@ Listed by the departments that fetch them:
 - `production/blender/ship/ASSETS_SHIP.md` — ambientCG / Poly Haven textures (CC0), NASA 3D Resources (PD) if used.
 - `production/audio/ASSETS_AUDIO.md` — NASA public-domain recordings and any CC BY sources, with credit lines.
 
+Required audio credit (CC BY 4.0, adapted: resampled, band-passed, bit-crushed, sliced): Cassini RPWS
+Saturn kilometric radiation — *Original space audio recordings provided courtesy of NASA and The
+University of Iowa. https://space-audio.org/*. Juno (Ganymede flyby) and InSight (Mars wind)
+recordings are NASA public domain.
+
 ## Code and tools
 
 | component | licence | use |

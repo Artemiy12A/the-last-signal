@@ -2,67 +2,71 @@
 
 ## Current phase
 
-**Phase 1 → 2 (core tech done, previs starting). Paused by the user on 2026-09-28 ~10:30 UTC.**
+**Phase 2 → 3: all 19 shots exist and render; first full-quality-ish preview cut (960 px, every
+frame, with the soundtrack) goes to the farm as `tls90-preview-1`. Next: reviewer passes.**
+
+Previews published so far:
+- `tls90-previs-1` (draft, every 2nd frame, no final ship/sound): https://github.com/Artemiy12A/the-last-signal/releases/tag/tls90-previs-1
 
 ## Done
 
-- Reference: original fetched and analysed (`docs/reference_analysis.md`, stills in `docs/reference/`).
-- Research: `docs/physics.md` (spin 0.8, 80–86° inclination, Page–Thorne 6500 K disk, beaming ∝ g²,
-  infall time dilation), `docs/research_sota.md` (trailer craft, finishing, farm), `docs/assets_research.md`.
-- Shot plan: `docs/shot_plan.md` (16 shots + black/title/button, the "ship becomes the signal" twist).
-- EDL: `production/tls/edl.py` — single timing source (shots, motif, signal pulses, beacon flashes,
-  interference, sound cues, silence 82.5–84.5).
-- Kerr tracer (`production/tracer`, C++/OpenMP): Kerr–Schild Hamiltonian RK4, validated shadow edges
-  (a = 0, 0.9, 0.99); volumetric turbulent disk (per-radius flow reset, filaments, lanes, hot spots),
-  haze, plunging gas; Tycho-2 stars with flux-conserving lensing footprints; NASA SVS Milky Way;
-  boosted camera tetrads; relativistic beacon emitter on a timelike worldline; EXR layers
-  (disk, haze, sky, stars, beacon, A, hole) or single beauty (env probes). ~76 µs/ray-core after
-  a 3× optimisation pass; estimated ~300 core-hours for the whole film at final.
-- Compositor (`production/comp`): per-layer gains, oval-bokeh DOF, bloom, glare, streaks, halation,
-  distortion + edge CA, vignette, AgX, grain, signal interference, titles.
-- Camera language (`production/tls/camera.py`), world/sky continuity (`tls/world.py`),
-  timelike geodesics for the fall (`tls/geodesic.py`), frame runner (`tls/render.py`).
-- Render farm: `.github/workflows/tls90-render.yml` + `tls/farm.py` (plan → build → 20× render →
-  assemble → release). Triggered by editing `production/render-request.json` or dispatch.
-  Smoke test 1 failed on 16-bit PNG writing (fixed: 16-bit PPM); retry (attempt 2) was launched,
-  result not yet checked.
-
-## In progress when paused
-
-- Hero ship (Blender, `production/blender/ship/`): agent interrupted by a rate limit mid-build
-  (geometry + materials scripts exist, no API/renders yet). Resume or rebuild from its brief.
-- Soundtrack (`production/audio/`): agent interrupted mid-build (dsp, motif, elements,
-  make_soundtrack exist, not yet rendered/verified).
-- S15 (the fall): beacon now reads; next is framing/exposure polish and a light-curve export for audio.
+- Reference analysis, research (`docs/physics.md`, `docs/research_sota.md`, `docs/assets_research.md`),
+  shot plan (`docs/shot_plan.md`), EDL (`production/tls/edl.py`).
+- Kerr tracer, compositor, camera language, geodesics, frame runner, review tools
+  (`tls/review.py`: camera motion curves, cut strips, contact sheets), S15 light-curve tool.
+- Render farm: plan → build → 20× render → assemble (ProRes master + H.264) → release. Works end
+  to end (previs-1: 18 min, 0 missing frames).
+- Hero ship LSV-7 (`production/blender/ship/`, README + ASSETS_SHIP.md): procedural hull, MLI,
+  lattice spine, HGA gimbal, lamps, light groups; cached .blend keyed by source hash.
+- Soundtrack (`production/audio/`, README + ASSETS_AUDIO.md): FM tritone motif (beacon tick ↔
+  slowed signal are one voice), braam reveal, Shepard fall, true digital silence 82.5–84.5,
+  −14 LUFS, rendered from the EDL and the S15 light curve.
+- 2026-09-29 shot pass:
+  - S05 disk dimmed to an ember (reveal stays the payoff).
+  - S06 rebuilt as an eclipse behind the dish.
+  - S08 rebuilt as a sparse long-lens debris stream with dust streamers.
+  - S12 as a grazing skim under the arch.
+  - S13 as a dutch-angled, blue-shifted forward view.
+  - S14 rebuilt as "last look", a beacon macro against the shadow.
+  - S15 moved to a high vantage (18° above the disk) so it no longer repeats S10.
+  - Time dilation made continuous S14→S15 (physics P15).
 
 ## Next
 
-1. Check farm smoke test (attempt 2); fix until an MP4 artifact comes out.
-2. Resume ship + audio agents (or redo inline).
-3. Write the remaining shot modules (S01–S06, S08, S09, S11–S14, BLK/TITLE/BTN), Blender frame
-   renderer (`tls/blender.py` + `production/blender/render_frame.py`), env probes.
-4. Full 90 s draft previs cut → pacing review (frame strips, camera velocity plots) → first
-   pre-release.
+1. Watch `tls90-preview-1` (contact sheet, cut strips, camera curves, audio plots).
+2. Independent reviewer agents on preview stills vs `docs/reference/` — most iterations on S10
+   reveal, S11 scale, S15 climax, TITLE.
+3. Known look issue: disk texture reads as brushed/"vinyl" streaks in close views (S12, S15) —
+   more clumps/lanes, less azimuthal coherence.
+4. Final render (2 waves if needed), final release, README link, Claude Docs bible, Canva poster +
+   vertical cover.
 
 ## Known problems
 
-- Disk lookdev not approved: colour reads beige under AgX, front band heavy at 86°; needs a grade
-  and reviewer passes.
-- Tycho-2 is CC BY-NC 3.0 IGO (fine for this non-commercial film; credit in ASSETS.md — to write).
-- ASSETS.md not written yet.
+- Disk striation (above). S14 is a strong image but the lamp's scale is ambiguous.
+- Nobody has listened to the mix yet (built from plots and numbers).
 
 ## Shot status
 
 | id | beat | status |
 |---|---|---|
-| BLK0 | black open | placeholder |
-| S01–S06 | Act I–II | placeholder |
-| S07 | glimpse: edge | preview (tracer-only draft) |
-| S08, S09 | debris, breath | placeholder |
-| S10 | the reveal | preview (tracer-only draft, no ship fg yet) |
-| S11–S14 | scale → time | placeholder |
-| S15 | the fall | preview (draft, beacon works) |
-| BLK1, TITLE, BTN | silence, title, button | placeholder |
+| BLK0 | black open | preview |
+| S01 | the deep | preview |
+| S02 | hull macro | preview |
+| S03 | listening | preview |
+| S04 | wrong stars | preview |
+| S05 | the pull | preview |
+| S06 | glimpse: light (eclipse) | preview |
+| S07 | glimpse: edge | preview |
+| S08 | debris | preview |
+| S09 | breath | preview |
+| S10 | the reveal | preview |
+| S11 | scale | preview |
+| S12 | under the arch | preview |
+| S13 | interference | preview |
+| S14 | last look | preview |
+| S15 | the fall | preview |
+| BLK1, TITLE, BTN | silence, title, button | preview |
 
 ## Pipeline commands
 
@@ -71,6 +75,10 @@ make -C production/tracer                         # build the tracer (native)
 python production/tools/build_sky.py all          # Tycho-2 stars + Milky Way map -> production/cache/sky
 cd production && python -m tls.render still S10 57.0 --q draft|preview|final
 cd production && python -m tls.render shot S15 --q draft --every 12
-cd production && python -m tls.farm plan --quality final --jobs 20
-python production/tools/lookdev.py /tmp/ld --dist 80 --incl 86 --var disk.h_over_r=0.012,0.02
+cd production && python -m tls.lightcurve         # after any S15 change (feeds edl.ship_rate + sound)
+python production/audio/make_soundtrack.py        # -> production/cache/audio/soundtrack.wav
+python production/audio/analyze.py                # spectrogram, loudness, sub-bass plots
+cd production && python -m tls.review camera      # camera motion curves
+cd production && python -m tls.farm plan --quality preview --jobs 20
+# farm: edit production/render-request.json (quality/frames/every/tag), commit, push
 ```

@@ -26,7 +26,7 @@ def ship_at(t):
 
 
 def params(t, q):
-    P = CompParams(exposure=0.4, gains={"sky": 1.1, "stars": 1.2, "ship_env": 1.0, "ship_key": 1.0, "ship_lamps": 1.0},
+    P = CompParams(exposure=0.4, gains={"sky": 1.1, "stars": 1.2, "disk": 0.18, "haze": 0.2, "ship_env": 1.0, "ship_key": 1.0, "ship_lamps": 1.0},
                    bloom=0.035, streak=0.06, streak_threshold=10.0, halation=0.05, vignette=0.33, punch=0.14,
                    white=(1.0, 0.97, 0.94), interference=0.25 * edl.interference(t))
     bl = {"controls": controls(t, engine=0.2), "probe": probe(float(dist(t)), strength=1.0, incl=88.8),

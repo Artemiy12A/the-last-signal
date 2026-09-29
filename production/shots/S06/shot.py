@@ -22,7 +22,7 @@ PIVOT = v3(0.0, 30.83, 0.0)                      # dish gimbal, ship frame
 DISH_C = PIVOT + rot((1, 0, 0), math.radians(DISH_EL)) @ v3(0.0, 1.57, 0.0)   # reflector centre
 RIGHT = norm(np.cross(HOLE, v3(0, 0, 1)))
 UP = np.cross(RIGHT, HOLE)
-slide = Track([(T0, 0.2), (T1, 3.2)], ease=0.35)   # metres to the right: the dish uncovers the hole
+slide = Track([(T0, 0.2), (T1, 2.45)], ease=0.35)   # metres to the right: the dish uncovers the hole
 HFOV = 50.0
 
 
@@ -41,10 +41,10 @@ def cam_at(t):
 
 def params(t, q):
     c = cam_at(t)
-    P = CompParams(exposure=0.2, gains={"sky": 0.8, "stars": 1.0, "disk": 1.0, "haze": 1.0, "ship_env": 0.9,
+    P = CompParams(exposure=0.9, gains={"sky": 0.7, "stars": 0.8, "disk": 1.0, "haze": 1.0, "ship_env": 0.9,
                                          "ship_key": 1.1, "ship_lamps": 1.0},
                    coc_px=c.coc_inf_px(), bloom=0.05, glare=0.02, streak=0.06, streak_threshold=14.0,
-                   halation=0.07, vignette=0.36, punch=0.3, look_sat=1.3, saturation=1.1, white=(1.0, 0.95, 0.9))
+                   halation=0.08, vignette=0.36, punch=0.3, look_sat=1.1, saturation=0.95, white=(1.0, 0.97, 0.93))
     bl = {"controls": controls(t, dish_el=DISH_EL), "probe": probe(D_BH, strength=1.0),
           "keys": [{"dir": list(map(float, HOLE)), "color": [1.0, 0.76, 0.5], "strength": 5.0, "angle": 3.0}]}
     return {"comp": P, "tracer": {}, "blender": bl}

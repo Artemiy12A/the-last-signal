@@ -831,6 +831,12 @@ What the renderer actually does, and where it departs:
 | P12 | LSV-7 ion thrusters sit behind the reactor on its unshielded side; radiators only roughly inside the shield's shadow cone | a real design puts them in the shield's shadow | silhouette and readability |
 | P13 | the xenon strobe is far brighter than a real beacon | real beacons are faint | it lights the foil and reads at distance |
 | P14 | ion plumes glow visibly | nearly invisible in reality | a thread of blue engine light sells scale in S11/S12 |
+| P15 | the ship's clock seen from the film's camera (`edl.ship_rate`): 1 until 72.5 s, eased through S14 to the redshift S15 starts with, then the tracer's measured S15 light curve (g from the beacon's colour) | — (this one follows physics) | the first editorial clock had ×4 stretch in S14 at r ≈ 10 M, where g ≈ 0.8 is what the metric gives; physics won and the full slow-down now lands in the climax |
+| P16 | sound: the "slowed world" varispeed uses (dτ/dt)^0.45 | dτ/dt | at the physical rate everything is sub-audible by 78 s |
+| P17 | sound: the beacon's ring echo 3 s after the last flash, used only if no measured light curve exists | ≈ 16 M ≈ 6.6 s of film time | the physical echo would land in the silence before the title |
+| P18 | sound: per-flash time stretch capped at ×10 | ×25 by the end of S15 | the root would fall to 26 Hz |
+| P19 | sound: measured flash fade (≈ g⁴) compressed (gain^0.3 in detection, applied as ^0.5) | g⁴ | the last flashes must stay audible |
+| P20 | S15 seen from 65 M, 18° above the disk plane; camera clock starts at 72 M so the fall lands inside the shot | — | a different vantage from the reveal (S10, 4°) for the climax |
 
 ## 13. References
 

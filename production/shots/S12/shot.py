@@ -1,27 +1,30 @@
-"""S12 — UNDER THE ARCH (65.5–69.5). Grazing skim just above the turbulent disk surface, the lensed
-arch towering overhead, the ship ahead."""
+"""S12 — UNDER THE ARCH (65.5–69.5). Grazing skim a third of a mass above the turbulent disk at
+r ~ 15 M, sweeping against the flow: the surface rushes underneath, the lensed arch towers overhead
+filling the top of frame, the ship a silhouette far ahead. Dutch angle, hull-borne vibration."""
 import math
 
 import numpy as np
 
 from comp.comp import CompParams
 from tls import edl
-from tls.camera import Cam, Track, look, norm, v3
+from tls.camera import Cam, Track, look, norm, rot, v3
 from tls.shotkit import controls, ship_matrix
 
 SHOT = edl.SHOT_BY_ID["S12"]
 T0, T1 = SHOT.start, SHOT.end
-r = Track([(T0, 31.0), (T1, 27.5)], ease=0.2)
-h = Track([(T0, 0.62), (T1, 0.55)])
+r = Track([(T0, 16.5), (T1, 14.0)], ease=0.2)
+h = Track([(T0, 0.38), (T1, 0.3)])
+az = Track([(T0, -84.0), (T1, -104.0)], ease=0.15)   # against the disk's rotation: relative speed
 
 
 def cam_at(t):
     rr = float(r(t))
-    a = math.radians(-96.0 + 5.0 * SHOT.local(t))
+    a = math.radians(float(az(t)))
     pb = v3(rr * math.cos(a), rr * math.sin(a), float(h(t)))
-    f = norm(look(pb, (0, 0, 1.0)))
-    c = Cam(fwd=f, up=v3(0, 0, 1), pos_bh=pb, pos_ship=v3(8.0, -160.0, -10.0), hfov=58.0)
-    return c.with_drift(t, 0.07, seed=12, vib_px=0.25)
+    f = norm(look(pb, (0, 0, 3.2)))           # look up at the arch
+    up = norm(rot(f, math.radians(-9.0)) @ v3(0, 0, 1))
+    c = Cam(fwd=f, up=up, pos_bh=pb, pos_ship=v3(8.0, -160.0, -10.0), hfov=64.0)
+    return c.with_drift(t, 0.08, seed=12, vib_px=0.35)
 
 
 def ship_at(t):

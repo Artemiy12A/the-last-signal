@@ -171,18 +171,11 @@ full file measures −14 LUFS integrated:
 * The measured flash fade (about g⁴) is compressed: gain^0.3 in detection, applied as ^0.5.
 * Sound in space: every sound is editorial.
 
-## Open issue for the orchestrator
+## S14/S15 continuity (resolved)
 
-**S14/S15 redshift discontinuity.** `edl.ship_clock` has g ≈ 0.24 (x4.2) at 75.7 s, and S14's
-flashes are already deep. The tracer's `shots/S15/lightcurve.json` starts at g = 0.83 (x1.2) at
-76.0 s and only reaches g = 0.18 by 82.4 s. The sound follows each shot, so at the S14→S15 cut the
-beacon's voice resets from nearly-the-signal back to nearly-the-tick, then morphs again through
-S15 (x1.2→x3.7). The picture presumably resets colour the same way. There are two fixes:
-
-* start S15's worldline later (T_CAM0), so g(76.0) ≈ 0.25;
-* or retime `ship_clock`, so S14 ends near g ≈ 0.8.
-
-Re-render once either changes: the sound follows automatically.
+`edl.ship_clock` now follows physics: S14 eases from ×1 to the redshift the measured S15 light curve
+starts with, and S15 follows the light curve itself, so the beacon's voice no longer resets at the
+cut (docs/physics.md P15). Re-render the soundtrack after any change to S15 or its light curve.
 
 ## Limits
 
