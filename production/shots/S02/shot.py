@@ -20,7 +20,7 @@ def cam_at(t):
     p = pos(t)
     c = Cam(fwd=look(p, aim(t)), up=v3(0, 0, 1), pos_bh=ship_pos_bh(2600.0), pos_ship=p, hfov=34.0,
             focus=float(focus(t)), fstop=2.2)
-    return c.with_drift(t, 0.06, seed=2, vib_px=0.15)
+    return c.with_drift(t, 0.06, seed=2)
 
 
 def ship_at(t):

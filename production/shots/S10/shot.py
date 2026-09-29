@@ -46,8 +46,8 @@ def ship_at(t):
 
 def params(t: float, q: str) -> dict:
     u = SHOT.local(t)
-    P = CompParams(exposure=-0.3, gains={"sky": 0.5, "stars": 0.9}, bloom=0.04, glare=0.014, streak=0.05,
-                   halation=0.05, vignette=0.3, punch=0.15, look_sat=1.08, white=(1.0, 0.97, 0.92))
+    P = CompParams(exposure=-0.7, gains={"sky": 0.5, "stars": 0.9}, bloom=0.04, glare=0.014, streak=0.05,
+                   halation=0.05, vignette=0.3, punch=0.3, look_sat=1.3, saturation=1.1, white=(1.0, 0.97, 0.92))
     # the braam lands with the reveal: a breath of overexposure that settles
     P.exposure += 0.35 * math.exp(-max(t - (T0 + 2.8), 0) / 1.2) * smoothstep(T0 + 1.8, T0 + 2.8, t)
     bl = {"controls": controls(t, engine=0.0), "probe": {"pos_bh": [float(x) for x in orbit_pos(float(dist(t)), float(incl(t)), -90.0)],

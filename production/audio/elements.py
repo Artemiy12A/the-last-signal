@@ -48,7 +48,7 @@ T_SLOW = cue_time("time_stretch", 72.5)      # where the world starts slowing
 
 SIGNAL_DB = -17.0          # received signal, pulse gain 1 (before the act offset below)
 # act offset for the signal (dB): quiet and sparse in Act I, full from the reveal on
-SIGNAL_ACT = [(0.0, -10.5), (S("S02", 10.0), -12.5), (S("S04", 21.5), -12.0), (S("S05", 28.0), -10.0),
+SIGNAL_ACT = [(0.0, -10.5), (S("S01", 3.0), -10.0), (S("S02", 10.0), -12.0), (S("S04", 21.5), -12.0), (S("S05", 28.0), -10.0),
               (S("S06", 33.5), -8.0), (S("S08", 41.0), -6.0), (S("S10", 48.5), -3.0), (edl.DURATION, -3.0)]
 BEACON_DB = -34.0          # the ship's tick at nearness 1
 RING_ECHO_DELAY = 3.0      # s after the last beacon flash (cinema: physical ~16 M is ~6.6 s)
@@ -318,7 +318,7 @@ def cue_low_hit(mix, cue) -> None:
     a, sub, rumble = hit_layers(1.0, seed=f"hit{cue.t}")
     g = db(-7.0) * lvl
     mix.add("fx", dsp.widen(a, 0.35, f"hit{cue.t}"), cue.t, g, sends={"hall": 0.45})
-    mix.add("fx", sub, cue.t, g * 1.1)
+    mix.add("fx", sub, cue.t, g * 0.85)
     mix.add("fx", dsp.widen(rumble, 1.0, f"rum{cue.t}"), cue.t, g, sends={"hall": 0.3})
     mix.duck_at(cue.t, 5.0 * lvl, 1.4)
     mix.hits.append(cue.t)
@@ -640,8 +640,8 @@ def cue_tension_pad(mix, cue) -> None:
             y += a * saw_stack(f, n, 5, 9.0, f"ten{f}{c}")
         st[:, c] = dsp.tv_filter(y, fc, 0.8, "lp", 128)
     mix.add("music", st * (lvl * trem)[:, None] * 0.35, t0, sends={"void": 0.25})
-    pv = dsp.curve(n, [(t0, -60), (t0 + 2.0, -32), (S("S12", 65.5), -27), (S("S13", 69.5), -21), (T_SLOW, -17),
-                        (max(t1, T_SLOW + 0.1), -17)], t0, "db") * dsp.fade(n, 0, n_of(0.6))
+    pv = dsp.curve(n, [(t0, -60), (t0 + 2.0, -32), (S("S12", 65.5), -27), (S("S13", 69.5), -22), (T_SLOW, -19),
+                        (max(t1, T_SLOW + 0.1), -19)], t0, "db") * dsp.fade(n, 0, n_of(0.6))
     mix.add("drones", (abs_sine(D1, t0, n) + 0.3 * abs_sine(D2, t0, n)) * pv, t0)
 
 
@@ -862,13 +862,14 @@ def cue_title_sting(mix, cue) -> None:
     t = tt(n)
     env = (1 - np.exp(-t / 0.25)) * np.exp(-t / 1.6)
     bloom = np.zeros((n, 2))
+    rb = dsp.rng("bloom")
     for f, amp in ((D2, 0.8), (D3, 0.7), (A3, 0.6), (2 * D3, 0.4), (2 * A3, 0.2)):
         for c in range(2):
-            ph = dsp.phase(f * (1 + (-1) ** c * 0.0007), n)
+            ph = dsp.phase(f * (1 + (-1) ** c * 0.0007), n, rb.uniform(0, dsp.TWO_PI))
             idx = 1.2 * np.exp(-t / 0.8) + 0.3
             bloom[:, c] += amp * np.sin(ph + idx * np.sin(motif.FM_RATIO * ph))
     subd = abs_sine(D1, cue.t, n) * (1 - np.exp(-t / 0.01)) * np.exp(-t / 1.3)
-    bloom = bloom * env[:, None] * 0.35 + subd[:, None] * 0.25
+    bloom = 0.8 * np.tanh(bloom * env[:, None] * 0.35 / 0.8) + subd[:, None] * 0.25
     mix.add("music", bloom, cue.t, db(2.0) * lvl, post=True, sends={"void": 0.45})
     mix.tail_end(cue.t + tail)
     mix.hits.append(cue.t)

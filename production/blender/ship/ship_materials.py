@@ -597,7 +597,7 @@ def lamp(name, color, strength, prop, ctrl, lens_col=(0.8, 0.8, 0.8)):
     return m
 
 
-def ion_grid(name, ctrl, strength=9.0, color=(0.22, 0.46, 1.0), grid_r=0.62):
+def ion_grid(name, ctrl, strength=5.5, color=(0.22, 0.46, 1.0), grid_r=0.62):
     """Molybdenum accelerator grid with a hexagonal aperture array (object space, grid in local XY).
     Apertures glow with the beam plasma when CTRL_engine > 0, brighter at the centre."""
     m, t = _new(name)

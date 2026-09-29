@@ -45,7 +45,7 @@ def pulses():
 
 
 dist = Track([(T0, 54.0), (T1, 49.0)], ease=0.3)
-aim = Track([(T0, v3(-0.8, 0, 3.6)), (T1, v3(-0.5, 0, 2.4))])
+aim = Track([(T0, v3(-0.8, 0, 4.9)), (T0 + 2.5, v3(-0.7, 0, 3.4)), (T1, v3(-0.5, 0, 2.4))])
 
 
 def cam_at(t: float) -> Cam:
@@ -64,5 +64,5 @@ def params(t: float, q: str) -> dict:
     }
     P = CompParams(exposure=-0.7 - 0.8 * smoothstep(0.55, 1.0, u), gains={"sky": 0.45, "stars": 0.8, "beacon": 1.0, "disk": 0.4, "haze": 0.4},
                    bloom=0.045, glare=0.016, streak=0.09, streak_threshold=12.0, halation=0.07, vignette=0.34,
-                   punch=0.18, look_sat=1.02, white=(1.0, 0.94, 0.86))
+                   punch=0.3, look_sat=1.3, saturation=1.1, white=(1.0, 0.94, 0.86))
     return {"comp": P, "tracer": {"beacon": beacon}}

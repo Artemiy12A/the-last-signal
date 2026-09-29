@@ -24,5 +24,5 @@ def cam_at(t: float) -> Cam:
 
 def params(t: float, q: str) -> dict:
     P = CompParams(exposure=-1.2, gains={"sky": 0.3, "stars": 0.6}, bloom=0.03, glare=0.01, streak=0.04,
-                   halation=0.07, vignette=0.35, punch=0.2, look_sat=1.1, white=(1.0, 0.95, 0.88))
+                   halation=0.07, vignette=0.35, punch=0.3, look_sat=1.3, saturation=1.1, white=(1.0, 0.95, 0.88))
     return {"comp": P, "tracer": {"disk": {"octaves": 7}}}

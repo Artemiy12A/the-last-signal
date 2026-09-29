@@ -43,7 +43,7 @@ DISK = {
     "r_out": 22.0, "taper": 0.35, "h_over_r": 0.012, "kappa": 4.0,
     "haze": 0.002, "haze_h": 0.1, "flow_period": 0.35, "n_phi": 16,
 }
-SKY = {"gain": 1.5, "stars_gain": 3e-5, "star_max_radius": 0.006}
+SKY = {"gain": 4.0, "stars_gain": 3e-5, "star_max_radius": 0.006}
 
 # film seconds -> disk time (M). Slow and stately; ISCO orbit (~35 M) takes ~25 s of screen time.
 DISK_RATE = 1.4

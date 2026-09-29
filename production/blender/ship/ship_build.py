@@ -851,8 +851,8 @@ def build_aft(B, rng, lights):
         p = MeshBuilder(f"SHIP_IonPlume_{i}", rng)
         p.lathe([(0, 0.03), (0.66, 0.03), (2.9, 14.0), (0, 14.0)], 32, "plume")
         B[f"plume{i}"] = (p, gxf)
-        cen = (gxf @ np.array([0, 0, 0.45, 1.0]))[:3]
-        lights.append((f"Engine_{i}", "engine", cen, (0.35, 0.55, 1.0), 450.0, 0.4))
+        cen = (gxf @ np.array([0, 0, 1.5, 1.0]))[:3]
+        lights.append((f"Engine_{i}", "engine", cen, (0.3, 0.52, 1.0), 220.0, 0.6))
 
 
 # ------------------------------------------------------------------------------------ main

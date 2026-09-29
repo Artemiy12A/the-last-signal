@@ -1,0 +1,15 @@
+S01   speed mean 0.003 max 0.004 frame-widths/s | accel max 0.16 deg/s^2 | jerk p99.5 1.4
+S02   speed mean 0.135 max 0.247 frame-widths/s | accel max 49.05 deg/s^2 | jerk p99.5 3022.9
+S03   speed mean 0.040 max 0.042 frame-widths/s | accel max 0.51 deg/s^2 | jerk p99.5 4.2
+S04   speed mean 0.001 max 0.001 frame-widths/s | accel max 0.47 deg/s^2 | jerk p99.5 29.4
+S05   speed mean 0.001 max 0.001 frame-widths/s | accel max 0.27 deg/s^2 | jerk p99.5 8.7
+S06   speed mean 0.005 max 0.013 frame-widths/s | accel max 20.96 deg/s^2 | jerk p99.5 2998.7
+S07   speed mean 0.038 max 0.039 frame-widths/s | accel max 0.03 deg/s^2 | jerk p99.5 0.3
+S08   speed mean 0.010 max 0.015 frame-widths/s | accel max 2.85 deg/s^2 | jerk p99.5 36.1
+S09   speed mean 0.002 max 0.003 frame-widths/s | accel max 0.21 deg/s^2 | jerk p99.5 2.2
+S10   speed mean 0.024 max 0.104 frame-widths/s | accel max 3.48 deg/s^2 | jerk p99.5 9.8
+S11   speed mean 0.002 max 0.003 frame-widths/s | accel max 0.09 deg/s^2 | jerk p99.5 1.0
+S12   speed mean 0.024 max 0.041 frame-widths/s | accel max 125.30 deg/s^2 | jerk p99.5 11963.8
+S13   speed mean 0.021 max 0.053 frame-widths/s | accel max 219.81 deg/s^2 | jerk p99.5 30616.4
+S14   speed mean 0.007 max 0.010 frame-widths/s | accel max 0.04 deg/s^2 | jerk p99.5 0.4
+S15   speed mean 0.005 max 0.007 frame-widths/s | accel max 0.45 deg/s^2 | jerk p99.5 3.2

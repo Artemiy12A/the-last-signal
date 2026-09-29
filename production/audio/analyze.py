@@ -313,7 +313,7 @@ def report(x, stems, meta, integ, tp, lra_v, path):
         if offs:
             P(f"  beacon flashes: {len(offs)} audible onsets, offset min {min(offs):+.1f} / max {max(offs):+.1f} ms")
     P("")
-    P("per shot:   rms dBFS | short-term LUFS mean / max | sub 20-80 Hz dBFS | 150-1k dBFS")
+    P("per shot:   rms dBFS | short-term LUFS mean / max (momentary if < 3 s) | sub 20-80 Hz dBFS | 150-1k dBFS")
     tsub, esub = band_energy(x, 20, 80)
     tmid, emid = band_energy(x, 150, 1000)
     for s in edl.SHOTS:
@@ -321,8 +321,12 @@ def report(x, stems, meta, integ, tp, lra_v, path):
         seg = x[a:b]
         rms = dsp.to_db(np.sqrt(np.mean(seg ** 2)) + 1e-30)
         m = (ts >= s.start) & (ts < s.end)
-        lmean = ls[m].mean() if m.any() else float("nan")
-        lmax = ls[m].max() if m.any() else float("nan")
+        mm = (tm >= s.start) & (tm < s.end)
+        lmean = ls[m].mean() if m.any() else lm[mm].mean()
+        lmax = ls[m].max() if m.any() else lm[mm].max()
+        if any(abs(s.start - a) < 1e-6 for a, _ in edl.SILENCE):
+            P(f"  {s.id:6s} {s.start:5.1f}-{s.end:5.1f}  digital silence (short-term windows straddle it)")
+            continue
         ms = (tsub >= s.start) & (tsub < s.end)
         sub = 10 * np.log10(np.mean(10 ** (esub[ms] / 10)) + 1e-20)
         mid = 10 * np.log10(np.mean(10 ** (emid[ms] / 10)) + 1e-20)

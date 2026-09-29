@@ -678,7 +678,7 @@ int main(int argc, char** argv) {
     for (int j = 0; j < CH; ++j) {
         for (int i = 0; i < CW; ++i) {
             size_t pi = size_t(j) * CW + i;
-            if (!needs_ss[pi] || !S.disk_on) {
+            if ((!needs_ss[pi] || !S.disk_on) && !(S.beacon.on && !S.disk_on)) {
                 // sky only: transmittance 1 (or partially captured)
                 L_sky[pi] = skyA[pi];
                 L_A[pi] = 1.f - escA[pi];
@@ -686,7 +686,7 @@ int main(int argc, char** argv) {
                 continue;
             }
             Rng rng(uint64_t(S.seed) * 0x9E3779B97F4A7C15ULL + uint64_t(Y0 + j) * 100003ULL + uint64_t(X0 + i));
-            int N = needs_ss[pi] == 2 ? S.spp : S.spp_haze;
+            int N = (needs_ss[pi] == 2 || (S.beacon.on && !S.disk_on)) ? S.spp : S.spp_haze;
             RGB sd, sh, ss, sb;
             float sT = 0, shole = 0;
             int sq = std::max(1, int(std::sqrt(double(N))));

@@ -167,8 +167,35 @@ def build_stars(gamma: float, out: Path):
 
 
 # ------------------------------------------------------------------ Milky Way
+SVS_MW = "https://svs.gsfc.nasa.gov/vis/a000000/a004800/a004851/milkyway_2020_8k_gal.exr"
+
+
 def build_mw(out: Path):
-    """Diffuse Milky Way from the original film's star-removed NASA SVS map (8-bit, gamma encoded)."""
+    """Diffuse Milky Way: NASA SVS Deep Star Maps 2020 'milkyway_2020_8k_gal' (HDR, galactic, with the
+    Hipparcos/Tycho stars already removed, so it complements the Tycho-2 point stars exactly).
+    Re-encoded as half-float RGB, normalised so its median matches the previous calibration."""
+    import OpenEXR
+    src = fetch(SVS_MW, DL / "svs" / "milkyway_2020_8k_gal.exr")
+    with OpenEXR.File(str(src)) as f:
+        ch = f.channels()
+        key = "RGB" if "RGB" in ch else ("RGBA" if "RGBA" in ch else None)
+        if key:
+            px = np.asarray(ch[key].pixels, dtype=np.float32)[..., :3]
+        else:
+            px = np.stack([np.asarray(ch[c].pixels, np.float32) for c in ("R", "G", "B")], -1)
+    px = np.nan_to_num(np.maximum(px, 0))
+    med = float(np.median(px @ np.array([0.2126, 0.7152, 0.0722], np.float32)))
+    target = 9.8e-05                     # median of the old (original film) map: keeps world.SKY gains valid
+    px *= target / max(med, 1e-12)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    rgba = np.concatenate([px, np.ones_like(px[..., :1])], 2).astype(np.float16)
+    with OpenEXR.File({"compression": OpenEXR.ZIP_COMPRESSION, "type": OpenEXR.scanlineimage}, {"RGBA": rgba}) as f:
+        f.write(str(out))
+    print(f"mw: SVS {px.shape[1]}x{px.shape[0]} median {med:.3g} -> {out}")
+
+
+def build_mw_legacy(out: Path):
+    """Previous source: the original film's star-removed NASA SVS map (8-bit, gamma encoded)."""
     from PIL import Image
     import OpenEXR
     src = ROOT / "assets" / "sky" / "milkyway_diffuse.jpg"

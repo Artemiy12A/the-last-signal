@@ -30,7 +30,7 @@ def ship_at(t):
 
 def params(t, q):
     P = CompParams(exposure=-0.9, gains={"sky": 0.5, "stars": 0.8, "ship_env": 1.0, "ship_key": 1.0, "ship_lamps": 1.3},
-                   bloom=0.05, glare=0.02, streak=0.07, halation=0.07, vignette=0.34, punch=0.2, look_sat=1.08,
+                   bloom=0.05, glare=0.02, streak=0.07, halation=0.07, vignette=0.34, punch=0.3, look_sat=1.3, saturation=1.1,
                    white=(1.0, 0.95, 0.88))
     bl = {"controls": controls(t, engine=0.25), "probe": {"pos_bh": [float(x) for x in cam_at(t).pos_bh], "strength": 1.0},
           "keys": []}
