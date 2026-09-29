@@ -1,34 +1,43 @@
-"""S14 — TIME (72.5–76.0). Extreme long-lens close-up of the beacon as seen from far away: each pulse
-slower, the colour sinking from white to red (time dilation, felt)."""
+"""S14 — LAST LOOK (72.5–76.0). Macro on the dorsal beacon, the motif's source, sharp in the foreground;
+behind it the hole fills the frame as soft oval bokeh — the shadow and the lensed arch, 10 M away. The
+strobe fires against the blaze: an echo of S02's first flash in the dark. Its clock is just beginning to
+slow (edl.ship_rate x1 -> x1.2 here, what r ~ 10 M really gives); the next shot pulls out to watch this
+same light fall."""
 import math
 
 from comp.comp import CompParams
 from tls import edl
-from tls.camera import Cam, Track, look, smoothstep, v3
-from tls.shotkit import controls, probe, ship_matrix
+from tls.camera import Cam, Track, norm, v3
+from tls.shotkit import cam_pos_for_screen, controls, probe, ship_matrix, ship_pos_bh
 
 SHOT = edl.SHOT_BY_ID["S14"]
 T0, T1 = SHOT.start, SHOT.end
-aim = Track([(T0, v3(0.4, 15.9, 2.6)), (T1, v3(0.2, 15.6, 2.8))])
+BEACON = v3(0.0, 15.73, 2.95)
+HFOV = 30.0
+dist = Track([(T0, 2.6), (T1, 2.05)], ease=0.3)                # slow push onto the lamp
+fwd = Track([(T0, v3(-0.2, 1.0, -0.07)), (T1, v3(-0.16, 1.0, -0.04))], ease=0.3)
 
 
 def cam_at(t):
-    p = v3(250.0, 60.0, 330.0)
-    c = Cam(fwd=look(p, aim(t)), up=v3(0, 0, 1), pos_bh=v3(0, -10.0, 1.2), pos_ship=p, hfov=2.2,
-            focus=415.0, fstop=4.0)
-    return c.with_drift(t, 0.004, seed=14)
+    f = norm(fwd(t))
+    d = float(dist(t))
+    b = (ship_at(t) @ [*BEACON, 1.0])[:3]                     # the lamp where the posed ship carries it
+    p = cam_pos_for_screen(f, (0, 0, 1), 0.42, 0.42, d, HFOV, target=b)
+    c = Cam(fwd=f, up=v3(0, 0, 1), pos_bh=ship_pos_bh(10.0), pos_ship=p, hfov=HFOV, focus=d, fstop=1.4)
+    return c.with_drift(t, 0.05, seed=14, vib_px=0.3)
 
 
 def ship_at(t):
-    return ship_matrix(yaw=0.0, pitch=-8.0, roll=12.0)
+    return ship_matrix(yaw=80.0, pitch=-3.0, roll=6.0)   # broadside to the hole: the hull falls away
 
 
 def params(t, q):
-    u = SHOT.local(t)
-    red = smoothstep(0.0, 1.0, u)
-    P = CompParams(exposure=-0.8 - 1.2 * red, gains={"sky": 0.4, "stars": 0.6, "ship_env": 0.7 - 0.4 * red,
-                                                     "ship_key": 0.8, "ship_lamps": 1.4},
-                   white=(1.0, 0.9 - 0.35 * red, 0.8 - 0.55 * red), bloom=0.06, glare=0.02, streak=0.08,
-                   halation=0.09, vignette=0.36, punch=0.22, look_sat=1.1)
-    bl = {"controls": controls(t, engine=0.0, flicker=False), "probe": probe(10.0, strength=0.5), "keys": []}
+    c = cam_at(t)
+    P = CompParams(exposure=-1.0, gains={"sky": 0.4, "stars": 0.6, "disk": 1.0, "haze": 1.0,
+                                         "ship_env": 1.0, "ship_key": 1.0, "ship_lamps": 1.2},
+                   coc_px=c.coc_inf_px(), white=(1.0, 0.95, 0.9), bloom=0.03, glare=0.006, streak=0.0,  # the lens is 50 px wide here: a streak would be a bar
+                  
+                   streak_threshold=30.0, streak_len=140.0, halation=0.08, vignette=0.36, punch=0.3, look_sat=1.3, saturation=1.1)
+    bl = {"controls": controls(t, engine=0.0, flicker=False), "probe": probe(10.0, strength=1.0),
+          "keys": [{"dir": [-0.15, 1.0, 0.3], "color": [1.0, 0.8, 0.6], "strength": 1.2, "angle": 25.0}]}
     return {"comp": P, "tracer": {}, "blender": bl}

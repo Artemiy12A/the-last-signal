@@ -254,8 +254,8 @@ def _rock_material():
     noise.inputs["Scale"].default_value = 6.0
     noise.inputs["Detail"].default_value = 8.0
     ramp = nt.nodes.new("ShaderNodeValToRGB")
-    ramp.color_ramp.elements[0].color = (0.035, 0.032, 0.03, 1)
-    ramp.color_ramp.elements[1].color = (0.16, 0.14, 0.12, 1)
+    ramp.color_ramp.elements[0].color = (0.06, 0.055, 0.05, 1)
+    ramp.color_ramp.elements[1].color = (0.28, 0.25, 0.21, 1)
     nt.links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
     nt.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
     bump = nt.nodes.new("ShaderNodeBump")
@@ -265,7 +265,7 @@ def _rock_material():
     return m
 
 
-def _rock_meshes(n=6):
+def _rock_meshes(n=10):
     out = []
     for i in range(n):
         name = f"TLS_rockmesh{i}"
@@ -275,8 +275,11 @@ def _rock_meshes(n=6):
             o = bpy.context.active_object
             o.scale = (1.0, 0.6 + 0.35 * ((i * 37) % 7) / 7, 0.45 + 0.4 * ((i * 53) % 5) / 5)
             tex = bpy.data.textures.new(f"TLS_rocktex{i}", "VORONOI")
-            tex.noise_scale = 0.55 + 0.1 * i
-            d = o.modifiers.new("disp", "DISPLACE"); d.texture = tex; d.strength = 0.35
+            tex.noise_scale = 0.45 + 0.09 * i
+            tex.distance_metric = "MINKOVSKY_FOUR" if i % 3 == 0 else ("MANHATTAN" if i % 3 == 1 else "DISTANCE")
+            d = o.modifiers.new("disp", "DISPLACE"); d.texture = tex; d.strength = 0.45 + 0.05 * (i % 4)
+            d.texture_coords = "LOCAL"
+            tex.noise_intensity = 1.0 + 0.1 * i
             tex2 = bpy.data.textures.new(f"TLS_rocktex2_{i}", "CLOUDS")
             tex2.noise_scale = 0.25
             d2 = o.modifiers.new("disp2", "DISPLACE"); d2.texture = tex2; d2.strength = 0.12
@@ -292,71 +295,108 @@ def _rock_meshes(n=6):
     return out
 
 
+def _dust_volume(prop: dict, col):
+    """World-space noise dust in a box: clumpy sheets so rock and ship shadows cut visible shafts."""
+    box = prop.get("dust_box", {"center": (-25.0, 0.0, 0.0), "size": (110.0, 320.0, 70.0)})
+    me = bpy.data.meshes.new("TLS_dust")
+    vs = [(x, y, z) for x in (-0.5, 0.5) for y in (-0.5, 0.5) for z in (-0.5, 0.5)]
+    fs = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
+    me.from_pydata(vs, [], fs)
+    v = bpy.data.objects.new("TLS_dust", me)
+    v.location = tuple(box["center"])
+    v.scale = tuple(box["size"])
+    col.objects.link(v)
+    vm = bpy.data.materials.new("TLS_dust")
+    vm.use_nodes = True
+    nt = vm.node_tree
+    nt.nodes.remove(nt.nodes.get("Principled BSDF"))
+    pv = nt.nodes.new("ShaderNodeVolumePrincipled")
+    pv.inputs["Color"].default_value = (*prop.get("dust_color", (0.8, 0.74, 0.66)), 1)
+    pv.inputs["Anisotropy"].default_value = float(prop.get("dust_aniso", 0.72))
+    geo = nt.nodes.new("ShaderNodeNewGeometry")          # world-space position: scale is 1/metres
+    # the dust drifts with the stream (offset -vel*t) and is stretched along it into streamers
+    t = float(prop.get("t", 0.0))
+    vel = prop.get("vel", (0.0, 0.0, 0.0))
+    add = nt.nodes.new("ShaderNodeVectorMath"); add.operation = "ADD"; add.name = "drift"
+    add.inputs[1].default_value = tuple(-float(v) * t for v in vel)
+    mul = nt.nodes.new("ShaderNodeVectorMath"); mul.operation = "MULTIPLY"
+    mul.inputs[1].default_value = tuple(prop.get("dust_stretch", (1.0, 1.0, 1.0)))
+    nt.links.new(geo.outputs["Position"], add.inputs[0])
+    nt.links.new(add.outputs[0], mul.inputs[0])
+    nz = nt.nodes.new("ShaderNodeTexNoise")
+    nz.inputs["Scale"].default_value = float(prop.get("dust_scale", 0.02))
+    nz.inputs["Detail"].default_value = 5.0
+    nz.inputs["Roughness"].default_value = 0.55
+    nt.links.new(mul.outputs[0], nz.inputs["Vector"])
+    mr = nt.nodes.new("ShaderNodeMapRange")
+    lo, hi = prop.get("dust_range", (0.46, 0.78))
+    mr.inputs["From Min"].default_value = lo
+    mr.inputs["From Max"].default_value = hi
+    mr.inputs["To Min"].default_value = 0.0
+    mr.inputs["To Max"].default_value = float(prop.get("dust_density", 0.004))
+    nt.links.new(nz.outputs["Fac"], mr.inputs["Value"])
+    nt.links.new(mr.outputs["Result"], pv.inputs["Density"])
+    nt.links.new(pv.outputs[0], nt.nodes.get("Material Output").inputs["Volume"])
+    v.data.materials.append(vm)
+
+
 def debris(prop: dict, times: list):
+    """Rocks + dust. Either explicit rocks (prop["rocks"]: [x, y, z, size, ax, ay, az, spin] at t=0, moving
+    with prop["vel"]) or a seeded box of rocks wrapping along Y."""
     import random
     seed = int(prop.get("seed", 1))
     n = int(prop.get("count", 90))
+    explicit = prop.get("rocks")
     col = bpy.data.collections.get("TLS_PROPS")
     if col is None:
         col = bpy.data.collections.new("TLS_PROPS")
         bpy.context.scene.collection.children.link(col)
         meshes = _rock_meshes()
         rng = random.Random(seed)
-        nb = int(prop.get("boulders", 12))
-        for i in range(n + nb):
-            o = bpy.data.objects.new(f"TLS_rock{i}", meshes[i % len(meshes)])
-            if i < n:
-                size = math.exp(rng.uniform(math.log(0.06), math.log(3.0)))
-                pos = (rng.uniform(*prop.get("x", (-44.0, -12.0))), rng.uniform(-120.0, 120.0),
-                       rng.uniform(*prop.get("z", (-14.0, 12.0))))
-            else:  # big boulders beyond the ship, for depth
-                size = rng.uniform(4.0, 11.0)
-                pos = (rng.uniform(25.0, 90.0), rng.uniform(-120.0, 120.0), rng.uniform(-30.0, 30.0))
-            o["size"] = size
-            o["p0"] = pos
-            o["axis"] = (rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1))
-            o["spin"] = rng.uniform(-1.2, 1.2) / max(size, 0.3)
-            col.objects.link(o)
+        if explicit:
+            for i, r in enumerate(explicit):
+                o = bpy.data.objects.new(f"TLS_rock{i}", meshes[(i * 7) % len(meshes)])
+                o["size"], o["p0"], o["axis"], o["spin"] = r[3], tuple(r[:3]), tuple(r[4:7]), r[7]
+                o["shape"] = tuple(r[8:11]) if len(r) >= 11 else (1.0, 1.0, 1.0)
+                col.objects.link(o)
+        else:
+            nb = int(prop.get("boulders", 12))
+            for i in range(n + nb):
+                o = bpy.data.objects.new(f"TLS_rock{i}", meshes[i % len(meshes)])
+                if i < n:
+                    size = math.exp(rng.uniform(math.log(0.06), math.log(3.0)))
+                    pos = (rng.uniform(*prop.get("x", (-44.0, -12.0))), rng.uniform(-120.0, 120.0),
+                           rng.uniform(*prop.get("z", (-14.0, 12.0))))
+                else:  # big boulders beyond the ship, for depth
+                    size = rng.uniform(4.0, 11.0)
+                    pos = (rng.uniform(25.0, 90.0), rng.uniform(-120.0, 120.0), rng.uniform(-30.0, 30.0))
+                o["size"] = size
+                o["p0"] = pos
+                o["axis"] = (rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1))
+                o["spin"] = rng.uniform(-1.2, 1.2) / max(size, 0.3)
+                col.objects.link(o)
         if prop.get("dust", True):
-            me = bpy.data.meshes.new("TLS_dust")
-            vs = [(x, y, z) for x in (-0.5, 0.5) for y in (-0.5, 0.5) for z in (-0.5, 0.5)]
-            fs = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
-            me.from_pydata(vs, [], fs)
-            v = bpy.data.objects.new("TLS_dust", me)
-            v.location = (-25.0, 0.0, 0.0)
-            v.scale = (110.0, 320.0, 70.0)
-            col.objects.link(v)
-            vm = bpy.data.materials.new("TLS_dust")
-            vm.use_nodes = True
-            nt = vm.node_tree
-            nt.nodes.remove(nt.nodes.get("Principled BSDF"))
-            pv = nt.nodes.new("ShaderNodeVolumePrincipled")
-            pv.inputs["Color"].default_value = (0.8, 0.74, 0.66, 1)
-            pv.inputs["Anisotropy"].default_value = 0.72
-            nz = nt.nodes.new("ShaderNodeTexNoise")
-            nz.inputs["Scale"].default_value = float(prop.get("dust_scale", 0.02))
-            nz.inputs["Detail"].default_value = 4.0
-            mr = nt.nodes.new("ShaderNodeMapRange")
-            mr.inputs["From Min"].default_value = 0.46
-            mr.inputs["From Max"].default_value = 0.78
-            mr.inputs["To Min"].default_value = 0.0
-            mr.inputs["To Max"].default_value = float(prop.get("dust_density", 0.004))
-            nt.links.new(nz.outputs["Fac"], mr.inputs["Value"])
-            nt.links.new(mr.outputs["Result"], pv.inputs["Density"])
-            nt.links.new(pv.outputs[0], nt.nodes.get("Material Output").inputs["Volume"])
-            v.data.materials.append(vm)
+            _dust_volume(prop, col)
+    dm = bpy.data.materials.get("TLS_dust")
+    if dm and "drift" in dm.node_tree.nodes:   # batches reuse the scene: move the dust to this frame's time
+        t = float(prop.get("t", 0.0))
+        dm.node_tree.nodes["drift"].inputs[1].default_value = tuple(-float(v) * t for v in prop.get("vel", (0, 0, 0)))
     vel = prop.get("vel", (0.0, -38.0, 2.5))
     for o in [o for o in col.objects if o.name.startswith("TLS_rock")]:
         o.animation_data_clear()
         for fr, tt in zip((1, 2, 3), times):
             p0 = o["p0"]
-            y = (p0[1] + vel[1] * tt + 120.0) % 240.0 - 120.0
-            o.location = (p0[0] + vel[0] * tt, y, p0[2] + vel[2] * (tt % 20.0))
+            if explicit:
+                o.location = (p0[0] + vel[0] * tt, p0[1] + vel[1] * tt, p0[2] + vel[2] * tt)
+            else:
+                y = (p0[1] + vel[1] * tt + 120.0) % 240.0 - 120.0
+                o.location = (p0[0] + vel[0] * tt, y, p0[2] + vel[2] * (tt % 20.0))
             o.rotation_mode = "AXIS_ANGLE"
             ax = Vector(o["axis"]).normalized()
             o.rotation_axis_angle = (o["spin"] * tt, ax.x, ax.y, ax.z)
             s_ = o["size"]
-            o.scale = (s_, s_, s_)
+            sh = o.get("shape", (1.0, 1.0, 1.0))
+            o.scale = (s_ * sh[0], s_ * sh[1], s_ * sh[2])
             o.keyframe_insert("location", frame=fr)
             o.keyframe_insert("rotation_axis_angle", frame=fr)
 

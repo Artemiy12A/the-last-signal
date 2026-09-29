@@ -131,17 +131,83 @@ def signal_pulses() -> list[Pulse]:
     return pulses
 
 
-def ship_clock(t: float) -> float:
-    """Ship proper time as seen by the film's camera (the beacon's clock).
+T_DILATE = 72.5     # time dilation becomes perceptible (S14)
+T_FALL = 76.0       # S15: from here the tracer's measured light curve is the ship's clock
+G_FALL0 = 0.833     # beacon redshift g at the start of S15 (ship at r ~ 10.5 M), from tls.lightcurve
 
-    Normal until S14, then time dilation stretches it; S15's exact behaviour comes from the
-    relativistic infall computed for that shot, this is the editorial approximation used for sound."""
-    t_slow = 72.5
-    if t <= t_slow:
+
+def _fall_rate_table():
+    """(t, g) for t >= T_FALL: the smoothed redshift of the beacon measured by tls.lightcurve
+    (shots/S15/lightcurve.json), else an exponential stand-in. g = dtau/dt, the ship's clock rate."""
+    import json
+    from pathlib import Path as _P
+    f = _P(__file__).resolve().parents[1] / "shots" / "S15" / "lightcurve.json"
+    ts = [T_FALL + i * 0.01 for i in range(0, 1401)]
+    try:
+        raw = json.loads(f.read_text())
+        rows = raw["rows"] if isinstance(raw, dict) else raw
+        pts = sorted((r[0], r[2]) for r in rows if r[2] > 0)
+        # smooth the colour-fit noise: running mean over +-0.25 s
+        tt = [p_[0] for p_ in pts]
+        gg = []
+        for i, t_ in enumerate(tt):
+            w = [p_[1] for p_ in pts if abs(p_[0] - t_) <= 0.25]
+            gg.append(sum(w) / len(w))
+        scale = G_FALL0 / gg[0]
+        gs = []
+        for t_ in ts:
+            if t_ <= tt[-1]:
+                j = max(0, min(len(tt) - 2, next((k for k in range(len(tt) - 1) if tt[k + 1] >= t_), len(tt) - 2)))
+                u = (t_ - tt[j]) / max(tt[j + 1] - tt[j], 1e-9)
+                gs.append(scale * (gg[j] + u * (gg[j + 1] - gg[j])))
+            else:   # beyond the measurement: keep sinking with the horizon's e-folding
+                gs.append(gs[-1] * math.exp(-0.01 / 1.2))
+    except (OSError, KeyError, ValueError, IndexError):
+        gs = [G_FALL0 * math.exp(-(t_ - T_FALL) / 3.2) for t_ in ts]
+    return ts, [max(g, 1e-3) for g in gs]
+
+
+_FALL = None
+
+
+def ship_rate(t: float) -> float:
+    """dtau/dt of the ship's clock as the film's camera sees it (= the beacon's redshift g)."""
+    global _FALL
+    if t <= T_DILATE:
+        return 1.0
+    if t <= T_FALL:   # S14: the onset, easing from 1 to the value the fall starts with
+        u = (t - T_DILATE) / (T_FALL - T_DILATE)
+        return 1.0 - (1.0 - G_FALL0) * u * u * (3 - 2 * u)
+    if _FALL is None:
+        _FALL = _fall_rate_table()
+    ts, gs = _FALL
+    i = min(int((t - T_FALL) / 0.01), len(ts) - 2)
+    u = (t - ts[i]) / 0.01
+    return gs[i] + min(max(u, 0.0), 1.0) * (gs[i + 1] - gs[i])
+
+
+_CLOCK = None
+
+
+def ship_clock(t: float) -> float:
+    """Ship proper time as seen by the film's camera (the beacon's clock): the integral of ship_rate.
+    Normal until S14; gentle dilation through S14 (x1 -> x1.2, what r ~ 10 M really gives); S15 follows
+    the relativistic infall measured from the tracer, down to a frozen, fading clock."""
+    global _CLOCK
+    if t <= T_DILATE:
         return t
-    # dtau/dt falls exponentially (e-folding ~ 2.2 s of film time), freezing near 82.5
-    k = 2.2
-    return t_slow + k * (1.0 - math.exp(-(t - t_slow) / k))
+    if _CLOCK is None:
+        dt = 0.005
+        tab, tau = [T_DILATE], [T_DILATE]
+        while tab[-1] < 95.0:
+            t_ = tab[-1]
+            tau.append(tau[-1] + dt * 0.5 * (ship_rate(t_) + ship_rate(t_ + dt)))
+            tab.append(t_ + dt)
+        _CLOCK = (tab, tau)
+    tab, tau = _CLOCK
+    i = min(int((t - T_DILATE) / 0.005), len(tab) - 2)
+    u = (t - tab[i]) / 0.005
+    return tau[i] + u * (tau[i + 1] - tau[i])
 
 
 def beacon_flashes(t0: float = 0.0, t1: float = 82.5) -> list[Pulse]:

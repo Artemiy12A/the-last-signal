@@ -1,34 +1,50 @@
-"""S06 — GLIMPSE: LIGHT (33.5–37.0). Static close on the dish rim; for the first time warm gold light
-sweeps across the foil as the ship rolls; hard shadows swing."""
+"""S06 — GLIMPSE: LIGHT (33.5–37.0). An eclipse. From just behind the high-gain dish (the ship pitched
+nose-up below frame, the dish locked on the hole) we look past its back straight at the hole, which the dish hides completely. The camera slides; by parallax the
+dish rim drifts across the hole and the first light breaks around its edge — the rim ignites gold, a
+crescent of disk glow spills past it, the ship's body catches it in the foreground. First touch of its
+light, and still nothing seen."""
 import math
+
+import numpy as np
 
 from comp.comp import CompParams
 from tls import edl
-from tls.camera import Cam, Track, look, smoothstep, v3
-from tls.shotkit import controls, probe, ship_matrix, ship_pos_bh, warm_key_from_hole
+from tls.camera import Cam, Track, norm, rot, v3
+from tls.shotkit import controls, probe, ship_matrix, ship_pos_bh
 
 SHOT = edl.SHOT_BY_ID["S06"]
 T0, T1 = SHOT.start, SHOT.end
-roll = Track([(T0, -38.0), (T1, 6.0)], ease=0.3)
-
-
-def cam_at(t):
-    p = v3(7.5, 38.5, 2.6)
-    c = Cam(fwd=look(p, (1.2, 31.2, 0.4)), up=v3(0, 0, 1), pos_bh=ship_pos_bh(120.0), pos_ship=p, hfov=34.0,
-            focus=9.5, fstop=4.0)
-    return c.with_drift(t, 0.03, seed=6, vib_px=0.1)
+D_BH = 120.0
+HOLE = norm(-ship_pos_bh(D_BH))                  # direction to the hole from the ship (world = tracer axes)
+PITCH = 60.0                                     # nose up: the whole ship hangs below the frame
+DISH_EL = -PITCH                                 # the HGA stays locked on the hole (+el tilts it dorsal)
+PIVOT = v3(0.0, 30.83, 0.0)                      # dish gimbal, ship frame
+DISH_C = PIVOT + rot((1, 0, 0), math.radians(DISH_EL)) @ v3(0.0, 1.57, 0.0)   # reflector centre
+RIGHT = norm(np.cross(HOLE, v3(0, 0, 1)))
+UP = np.cross(RIGHT, HOLE)
+slide = Track([(T0, 0.2), (T1, 3.2)], ease=0.35)   # metres to the right: the dish uncovers the hole
+HFOV = 50.0
 
 
 def ship_at(t):
-    return ship_matrix(roll=float(roll(t)), yaw=-6.0)
+    return ship_matrix(pitch=PITCH, roll=2.0)
+
+
+def cam_at(t):
+    d = (ship_at(t) @ [*DISH_C, 1.0])[:3]
+    p = d - 18.0 * HOLE + float(slide(t)) * RIGHT + 0.5 * UP
+    # the hole sits a little right of centre; the dish drifts left past it
+    f = norm(rot(UP, math.radians(-4.0)) @ rot(RIGHT, math.radians(2.0)) @ HOLE)
+    c = Cam(fwd=f, up=v3(0, 0, 1), pos_bh=ship_pos_bh(D_BH), pos_ship=p, hfov=HFOV, focus=18.0, fstop=4.0)
+    return c.with_drift(t, 0.03, seed=6)
 
 
 def params(t, q):
     c = cam_at(t)
-    P = CompParams(exposure=-0.4, gains={"sky": 0.8, "stars": 1.0, "disk": 1.0, "ship_env": 0.8, "ship_key": 1.0,
-                                         "ship_lamps": 1.0},
-                   coc_px=c.coc_inf_px(), bloom=0.045, streak=0.07, streak_threshold=12.0, halation=0.06,
-                   vignette=0.34, punch=0.16, white=(1.0, 0.96, 0.9))
-    bl = {"controls": controls(t), "probe": probe(120.0, strength=1.0),
-          "keys": [warm_key_from_hole(strength=4.0, color=(1.0, 0.74, 0.44), angle=1.2, dir_=(0.35, 1.0, 0.3))]}
+    P = CompParams(exposure=0.2, gains={"sky": 0.8, "stars": 1.0, "disk": 1.0, "haze": 1.0, "ship_env": 0.9,
+                                         "ship_key": 1.1, "ship_lamps": 1.0},
+                   coc_px=c.coc_inf_px(), bloom=0.05, glare=0.02, streak=0.06, streak_threshold=14.0,
+                   halation=0.07, vignette=0.36, punch=0.3, look_sat=1.3, saturation=1.1, white=(1.0, 0.95, 0.9))
+    bl = {"controls": controls(t, dish_el=DISH_EL), "probe": probe(D_BH, strength=1.0),
+          "keys": [{"dir": list(map(float, HOLE)), "color": [1.0, 0.76, 0.5], "strength": 5.0, "angle": 3.0}]}
     return {"comp": P, "tracer": {}, "blender": bl}
