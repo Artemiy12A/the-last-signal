@@ -93,9 +93,9 @@ def params(t, q):
                    bloom=0.04, glare=0.015, streak=0.06, streak_threshold=14.0, halation=0.06, vignette=0.38,
                    punch=0.3, look_sat=1.15, white=(1.0, 0.95, 0.88))
     bl = {"controls": controls(t, engine=0.1), "probe": probe(100.0, strength=0.35),
-          "keys": [{"dir": list(map(float, LIGHT)), "color": [1.0, 0.74, 0.46], "strength": 9.0, "angle": 1.2}],
+          "keys": [{"dir": list(map(float, LIGHT)), "color": [1.0, 0.74, 0.46], "strength": 14.0, "angle": 1.0}],
           "props": [{"kind": "debris", "t": t, "rocks": ROCKS, "vel": list(map(float, VEL)),
                      "dust_box": {"center": [0.0, 80.0, 20.0], "size": [1100.0, 1100.0, 420.0]},
-                     "dust_density": 0.0007, "dust_scale": 0.012, "dust_range": [0.56, 0.8], "dust_stretch": [1.0, 0.22, 1.0],
+                     "dust_density": 0.0005, "dust_scale": 0.012, "dust_range": [0.56, 0.8], "dust_stretch": [1.0, 0.22, 1.0],
                      "dust_aniso": 0.6, "dust_color": [0.85, 0.8, 0.72]}]}
     return {"comp": P, "tracer": {}, "blender": bl}

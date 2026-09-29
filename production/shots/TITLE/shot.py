@@ -17,6 +17,8 @@ def params(t, q):
     a = smoothstep(T0 + 0.05, T0 + 0.9, t) * (1 - smoothstep(T1 - 1.1, T1 - 0.1, t))
     # a faint shiver on the sting, then steady
     a *= 1.0 - 0.25 * math.exp(-max(t - T0 - 0.1, 0) / 0.25) * (0.5 + 0.5 * math.sin(t * 90))
-    title = {"text": "THE LAST SIGNAL", "opacity": a, "glow": 0.18, "size": 0.026, "tracking": 0.78,
-             "weight": 300, "y": 0.5, "color": (0.90, 0.88, 0.84)}
+    # heavier than a hairline so it survives a phone and re-encoding; a faint photon ring behind it
+    title = {"text": "THE LAST SIGNAL", "opacity": a, "glow": 0.32, "size": 0.029, "tracking": 0.72,
+             "weight": 420, "y": 0.5, "color": (0.92, 0.89, 0.84),
+             "ring": {"opacity": 0.05 * a, "radius": 0.33, "width": 0.0016}}
     return {"black": True, "comp": CompParams(title=title)}

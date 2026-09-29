@@ -60,3 +60,21 @@ def draw_title(enc: np.ndarray, text: str, opacity: float = 1.0, glow: float = 0
     out = enc * (1 - a) + col * a
     out = out + (np.asarray(halo)[..., None] if np.ndim(halo) else 0) * opacity * col * 0.5
     return np.clip(out, 0, 1)
+
+
+def draw_ring(enc: np.ndarray, opacity: float, radius: float = 0.3, width: float = 0.0016, color=(1.0, 0.8, 0.55),
+              y: float = 0.5) -> np.ndarray:
+    """A barely-there photon ring behind the title: a thin circle (radius as a fraction of frame height),
+    softened, added on top of black."""
+    if opacity <= 0:
+        return enc
+    H, W = enc.shape[:2]
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    r = np.hypot(xx - W / 2, yy - y * H) / H
+    w = max(width, 0.5 / H)
+    ring = np.exp(-0.5 * ((r - radius) / w) ** 2)
+    glow = np.exp(-0.5 * ((r - radius) / (w * 8)) ** 2) * 0.25
+    # the Doppler-bright side on the left, as in the film
+    side = 0.65 + 0.35 * np.clip((W / 2 - xx) / (radius * H), -1, 1)
+    add = (ring + glow) * side * opacity
+    return np.clip(enc + add[..., None] * np.asarray(color, np.float32), 0, 1)

@@ -55,7 +55,11 @@ BEACON_DB = -34.0          # the ship's tick at nearness 1
 # a little less, back to unity before the reveal's J-cut swell
 ACT_RIDE = [(0.0, 7.0), (S("S05", 26.0) - 1.0, 7.0), (S("S05", 26.0) + 1.0, 4.0),
             (S("S09", 43.5) + 0.3, 4.0), (S("S10", 46.0) - 1.2, 0.0), (edl.DURATION, 0.0)]
-LAST_MOTIF_DB = 3.0        # the fall's last motif (the ship as the signal) sits above the signal's level
+def ride_db(t: float) -> float:
+    return float(np.interp(t, [a for a, _ in ACT_RIDE], [b for _, b in ACT_RIDE]))
+
+
+LAST_MOTIF_DB = 7.0        # the fall's last motif (the ship as the signal) sits above the signal's level
 WARP_BETA = 0.45           # sound time-dilation = (dtau/dt)^beta (cinema: physical beta = 1)
 SOUND_MAX_STRETCH = 10.0   # cap for the sound of a flash (x25 would put the root at 26 Hz)
 
@@ -171,7 +175,8 @@ def signal_voice(p, seed: str, rough: float) -> np.ndarray:
     clean, rad, w = motif.signal_pulse(p, seed, rough)
     clean_st = dsp.widen(clean, 0.65 * w, seed)
     r = dsp.rng("sigpan" + seed)
-    return clean_st * (1.0 - 0.35 * w) + dsp.pan(rad, r.uniform(-0.15, 0.15)) * 0.9 * w
+    y = clean_st * (1.0 - 0.35 * w) + dsp.pan(rad, r.uniform(-0.15, 0.15)) * 0.9 * w
+    return 0.9 * np.tanh(y / 0.9)                  # gentle bound on the attack crest (all pulses alike)
 
 
 def signal_layer(mix) -> None:
@@ -343,7 +348,7 @@ def hit_layers(level: float, body_f: float = D2, sub_f: float = 46.0, tail: floa
 def cue_low_hit(mix, cue) -> None:
     lvl = cue.params.get("level", 0.7)
     a, sub, rumble = hit_layers(1.0, seed=f"hit{cue.t}")
-    g = db(-7.0) * lvl
+    g = db(-7.0 - ride_db(cue.t)) * lvl
     mix.add("fx", dsp.widen(a, 0.35, f"hit{cue.t}"), cue.t, g, sends={"hall": 0.45})
     mix.add("fx", sub, cue.t, g * 0.85)
     mix.add("fx", dsp.widen(rumble, 1.0, f"rum{cue.t}"), cue.t, g, sends={"hall": 0.3})
@@ -569,7 +574,8 @@ def cue_debris_rumble(mix, cue) -> None:
     dust[pos[keep], 1] += (a * np.sin((pans + 1) * np.pi / 4))[keep]
     y += dsp.hp(dust, 2500.0, 2) * db(-38)
     y[-n_of(0.025):] *= dsp.fade(n_of(0.025), 0, n_of(0.025))[:, None]
-    mix.add("fx", y, t0, sends={"hull": 0.15, "void": 0.08})
+    y = 0.12 * np.tanh(y / 0.12)                   # rocks and thumps: bounded crest
+    mix.add("fx", y, t0, db(-2.0 - 0.5 * ride_db(t0)), sends={"hull": 0.15, "void": 0.08})
 
 
 def cue_near_silence(mix, cue) -> None:
@@ -651,10 +657,11 @@ def cue_braam(mix, cue) -> None:
     t = tt(n)
     env = dsp.curve(n, [(0, 1.0), (3.5, 0.85), (tail, 0.0)]) * np.exp(-np.maximum(t - 4.0, 0) / 1.2)
     st = np.stack([source_voice(n, "srcL"), source_voice(n, "srcR")], 1) * env[:, None]
-    mix.add("music", st, cue.t, db(-7.0) * lvl, sends={"hall": 0.35, "void": 0.15})
+    st = 0.8 * np.tanh(st / 0.8)                   # bound the attack crest
+    mix.add("music", st, cue.t, db(-6.5) * lvl, sends={"hall": 0.35, "void": 0.15})
     # impact layer on the attack
     a, sub, rumble = hit_layers(1.0, body_f=D2, sub_f=D1 * 1.25, tail=2.5, seed="revealhit")
-    mix.add("fx", dsp.widen(a, 0.4, "bh"), cue.t, db(-10.0) * lvl, sends={"hall": 0.4})
+    mix.add("fx", dsp.widen(a, 0.4, "bh"), cue.t, db(-13.0) * lvl, sends={"hall": 0.4})
     mix.add("fx", dsp.widen(rumble, 1.0, "bhr"), cue.t, db(-8.0) * lvl, sends={"hall": 0.3})
     mix.duck_at(cue.t, 9.0 * lvl, 2.8)
     mix.hits.append(cue.t)
@@ -684,7 +691,7 @@ def cue_sub_drop(mix, cue) -> None:
     ph = dsp.phase(f)
     a = (1 - np.exp(-t / 0.008)) * np.exp(-t / 2.4) * dsp.fade(n, 0, n_of(1.0))
     x = (np.sin(ph) + db(-12) * np.sin(2 * ph) + db(-18) * np.sin(3 * ph)) * a
-    mix.add("fx", x, cue.t, db(-11.0) * lvl)
+    mix.add("fx", x, cue.t, db(-13.0) * lvl)
 
 
 # ============================================================================ Act III
@@ -869,7 +876,7 @@ def cue_time_stretch(mix, cue) -> None:
     tl = tt(n)
     tt_abs = tf0 + tl
     u = tl / (t1 - tf0)
-    grow = dsp.curve(n, [(0, -70), (1.0, -36), (3.0, -30), (t1 - tf0 - 2.5, -19), (t1 - tf0, -10)], kind="db")
+    grow = dsp.curve(n, [(0, -70), (1.0, -36), (3.0, -30), (t1 - tf0 - 2.5, -20), (t1 - tf0, -13)], kind="db")
     # the motif's partials sinking with the clock (root = D2 at the signal's rate), then on, an octave
     ts, gv = ctrl_curve(ship_rate, tf0, t1, 500)
     rate = to_samples(ts, gv, tf0, n)
@@ -877,7 +884,7 @@ def cue_time_stretch(mix, cue) -> None:
     root = D2 * (rate / motif.G_SIGNAL if hasattr(motif, "G_SIGNAL") else rate * edl.SIGNAL_STRETCH) * 2.0 ** (-1.0 * hold)
     y = motif_cluster(root, n, 1.0, 6.0 + 10.0 * u, "fall")
     y += 0.5 * motif_cluster(root * 0.5, n, 0.6, 4.0, "fall2")
-    mix.add("music", dsp.widen(y * grow * 0.9, 0.8, "fallclu"), tf0, post=True, sends={"void": 0.25})
+    mix.add("music", dsp.widen(y * grow * 0.7, 0.8, "fallclu"), tf0, post=True, sends={"void": 0.25})
     # redshift wash: band noise whose centre sinks 2.6 kHz -> 320 Hz (the light going red)
     r = dsp.rng("wash")
     wash = dsp.tv_filter(dsp.colored(n, r, -3.0), 2600.0 * (320.0 / 2600.0) ** u, 0.8, "bp", 128)
@@ -894,11 +901,11 @@ def cue_time_stretch(mix, cue) -> None:
     roar = dsp.tv_filter(roar, 600.0 * (140.0 / 600.0) ** u, 0.9, "lp", 128)
     roar /= np.sqrt(np.mean(roar ** 2)) + 1e-9
     roar = np.tanh(roar / 2.5) * 2.5
-    mix.add("drones", dsp.widen(roar * grow * db(-7.5), 0.9, "roar"), tf0, post=True)
+    mix.add("drones", dsp.widen(roar * grow * db(-10.0), 0.9, "roar"), tf0, post=True)
     # sinking sub D1 -> A0 (27.5 Hz) with 2nd harmonic
     fs = D1 * (27.5 / D1) ** u
     ph = dsp.phase(fs)
-    sub = (np.sin(ph) + 0.5 * np.sin(2 * ph)) * grow * db(0)
+    sub = (np.sin(ph) + 0.5 * np.sin(2 * ph)) * grow * db(-3)
     mix.add("drones", sub, tf0, post=True)
 
 
@@ -914,7 +921,7 @@ def cue_title_sting(mix, cue) -> None:
     a, sub, rumble = hit_layers(1.0, body_f=D2, sub_f=D1 * 1.25, tail=1.8, seed="title")
     g = db(-9.0) * lvl
     mix.add("fx", dsp.widen(a, 0.4, "th"), cue.t, g, post=True, sends={"hall": 0.4})
-    mix.add("fx", sub, cue.t, g * 0.8, post=True)
+    mix.add("fx", sub, cue.t, g * 0.6, post=True)
     mix.add("fx", dsp.widen(rumble, 1.0, "thr"), cue.t, g, post=True, sends={"hall": 0.25})
     n = n_of(tail)
     t = tt(n)
@@ -927,7 +934,7 @@ def cue_title_sting(mix, cue) -> None:
             idx = 1.2 * np.exp(-t / 0.8) + 0.3
             bloom[:, c] += amp * np.sin(ph + idx * np.sin(motif.FM_RATIO * ph))
     subd = abs_sine(D1, cue.t, n) * (1 - np.exp(-t / 0.01)) * np.exp(-t / 1.3)
-    bloom = 0.8 * np.tanh(bloom * env[:, None] * 0.35 / 0.8) + subd[:, None] * 0.25
+    bloom = 0.6 * np.tanh(bloom * env[:, None] * 0.35 / 0.6) + subd[:, None] * 0.2
     mix.add("music", bloom, cue.t, db(0.0) * lvl, post=True, sends={"void": 0.45})
     mix.tail_end(cue.t + tail)
     mix.hits.append(cue.t)

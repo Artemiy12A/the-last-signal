@@ -37,7 +37,7 @@ def params(t, q):
         {"x": x - 0.0016, "y": y + 0.0004, "rgb": [6.0, 0.25, 0.12], "sigma_px": 0.8},
         {"x": x + 0.0016, "y": y + 0.0004, "rgb": [0.2, 4.0, 0.8], "sigma_px": 0.8},
     ]
-    P = CompParams(exposure=0.6, gains={"sky": 0.75, "stars": 1.15}, bloom=0.03, glare=0.006, streak=0.015,
+    P = CompParams(exposure=0.6, gains={"sky": 0.75, "stars": 0.7}, bloom=0.03, glare=0.006, streak=0.015,
                    streak_threshold=20.0, streak_len=110.0, saturation=0.85, halation=0.03, vignette=0.32, punch=0.1, look_sat=1.0,
                    white=(0.96, 0.98, 1.03), fade=fade, sprites=sprites)
     return {"comp": P, "tracer": {"disk": {"on": False}}}

@@ -27,6 +27,14 @@ def ship_at(t):
     return ship_matrix(yaw=-4.0, pitch=1.5, roll=-3.0 + 0.8 * math.sin(0.25 * t))
 
 
+def _rim(t):
+    import numpy as np
+    c = cam_at(t)
+    r, u, f = c.basis()
+    v = f + 0.35 * u - 0.5 * r
+    return v / np.linalg.norm(v)
+
+
 def params(t, q):
     s = ease_in_out(smoothstep(T0 + 0.8, T0 + 3.4, t), 2.2)
     ctl = controls(t, dish_az=-38.0 + 38.0 * s, dish_el=-12.0 + 12.0 * s)
@@ -34,6 +42,8 @@ def params(t, q):
                    bloom=0.04, streak=0.06, streak_threshold=8.0, halation=0.05, vignette=0.32, punch=0.14,
                    white=(0.97, 0.98, 1.02), interference=0.25 * edl.interference(t))
     bl = {"controls": ctl, "world": {"color": [0.0004, 0.0005, 0.0007]},
-          "keys": [warm_key_from_hole(strength=2.2, color=(1.0, 0.84, 0.66), angle=0.8, dir_=(-0.45, 1.0, 0.55)),
-                   {"dir": [-0.7, -0.5, 0.4], "color": [0.62, 0.72, 1.0], "strength": 0.35, "angle": 10}]}
+          # one hard raking key, almost no fill (the far side falls to black), a cool rim from behind
+          "keys": [warm_key_from_hole(strength=2.8, color=(1.0, 0.84, 0.66), angle=0.5, dir_=(-0.9, 0.45, 0.4)),
+                   {"dir": [-0.7, -0.5, 0.4], "color": [0.62, 0.72, 1.0], "strength": 0.06, "angle": 10},
+                   {"dir": list(map(float, _rim(t))), "color": [0.7, 0.8, 1.0], "strength": 1.6, "angle": 1.0}]}
     return {"comp": P, "tracer": {"disk": {"on": False}}, "blender": bl}

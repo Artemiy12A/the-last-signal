@@ -254,8 +254,8 @@ def _rock_material():
     noise.inputs["Scale"].default_value = 6.0
     noise.inputs["Detail"].default_value = 8.0
     ramp = nt.nodes.new("ShaderNodeValToRGB")
-    ramp.color_ramp.elements[0].color = (0.06, 0.055, 0.05, 1)
-    ramp.color_ramp.elements[1].color = (0.28, 0.25, 0.21, 1)
+    ramp.color_ramp.elements[0].color = (0.035, 0.032, 0.03, 1)   # dark regolith: gold edges, black bodies
+    ramp.color_ramp.elements[1].color = (0.15, 0.135, 0.115, 1)
     nt.links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
     nt.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
     bump = nt.nodes.new("ShaderNodeBump")

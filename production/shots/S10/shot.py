@@ -50,7 +50,8 @@ def params(t: float, q: str) -> dict:
                    halation=0.05, vignette=0.3, punch=0.4, look_sat=1.15, saturation=0.85, white=(1.0, 0.97, 0.92))
     # the braam lands with the reveal: a breath of overexposure that settles
     P.exposure += 0.35 * math.exp(-max(t - (T0 + 2.8), 0) / 1.2) * smoothstep(T0 + 1.8, T0 + 2.8, t)
-    bl = {"controls": controls(t, engine=0.0), "probe": {"pos_bh": [float(x) for x in orbit_pos(float(dist(t)), float(incl(t)), -90.0)],
+    bl = {"controls": controls(t, engine=0.0, nav=0.3), "probe": {"pos_bh": [float(x) for x in orbit_pos(float(dist(t)), float(incl(t)), -90.0)],
                                                         "strength": 1.0},
-          "keys": [], "hide_ship": t > T0 + 5.0}
+          "keys": [{"dir": [0.0, 1.0, -0.05], "color": [1.0, 0.8, 0.58], "strength": 3.0, "angle": 2.0}],   # the hole rims the ship
+          "hide_ship": t > T0 + 5.0}
     return {"comp": P, "tracer": {}, "blender": bl}

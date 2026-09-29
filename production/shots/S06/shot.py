@@ -22,7 +22,7 @@ PIVOT = v3(0.0, 30.83, 0.0)                      # dish gimbal, ship frame
 DISH_C = PIVOT + rot((1, 0, 0), math.radians(DISH_EL)) @ v3(0.0, 1.57, 0.0)   # reflector centre
 RIGHT = norm(np.cross(HOLE, v3(0, 0, 1)))
 UP = np.cross(RIGHT, HOLE)
-slide = Track([(T0, 0.2), (T1, 2.45)], ease=0.35)   # metres to the right: the dish uncovers the hole
+slide = Track([(T0, -0.2), (T1, -2.45)], ease=0.35)  # metres to the left: the dish uncovers the approaching (bright) side
 HFOV = 50.0
 
 
@@ -33,18 +33,21 @@ def ship_at(t):
 def cam_at(t):
     d = (ship_at(t) @ [*DISH_C, 1.0])[:3]
     p = d - 18.0 * HOLE + float(slide(t)) * RIGHT + 0.5 * UP
-    # the hole sits a little right of centre; the dish drifts left past it
-    f = norm(rot(UP, math.radians(-4.0)) @ rot(RIGHT, math.radians(2.0)) @ HOLE)
+    # the hole sits a little left of centre; the dish drifts right past it
+    f = norm(rot(UP, math.radians(4.0)) @ rot(RIGHT, math.radians(2.0)) @ HOLE)
     c = Cam(fwd=f, up=v3(0, 0, 1), pos_bh=ship_pos_bh(D_BH), pos_ship=p, hfov=HFOV, focus=18.0, fstop=4.0)
     return c.with_drift(t, 0.03, seed=6)
 
 
 def params(t, q):
     c = cam_at(t)
-    P = CompParams(exposure=0.9, gains={"sky": 0.7, "stars": 0.8, "disk": 1.0, "haze": 1.0, "ship_env": 0.9,
+    P = CompParams(exposure=0.9, gains={"sky": 0.7, "stars": 0.8, "disk": 0.8, "haze": 0.3, "ship_env": 0.9,
                                          "ship_key": 1.1, "ship_lamps": 1.0},
                    coc_px=c.coc_inf_px(), bloom=0.05, glare=0.02, streak=0.06, streak_threshold=14.0,
                    halation=0.08, vignette=0.36, punch=0.3, look_sat=1.05, saturation=0.8, white=(1.0, 0.97, 0.93))
     bl = {"controls": controls(t, dish_el=DISH_EL), "probe": probe(D_BH, strength=1.0),
-          "keys": [{"dir": list(map(float, HOLE)), "color": [1.0, 0.76, 0.5], "strength": 5.0, "angle": 3.0}]}
+          # the hole's light from behind the dish, plus a grazing sliver from the side so the rim catches gold
+          "keys": [{"dir": list(map(float, HOLE)), "color": [1.0, 0.76, 0.5], "strength": 5.0, "angle": 3.0},
+                   {"dir": list(map(float, norm(HOLE - 0.55 * RIGHT))), "color": [1.0, 0.8, 0.55], "strength": 2.5,
+                    "angle": 2.0}]}
     return {"comp": P, "tracer": {}, "blender": bl}

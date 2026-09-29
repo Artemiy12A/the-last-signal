@@ -193,8 +193,14 @@ def _finish_frame(shot_id, spec, q, W, H, outdir, exrdir, png16, keep_exr) -> Pa
             P2.streak_len *= W / 1920.0
             enc = composite({"sky": enc}, P2, spec.t)
         if P.title:
-            from comp.titles import draw_title
-            enc = draw_title(enc, **P.title) * P.fade
+            from comp.titles import draw_ring, draw_title
+            ring = P.title.get("ring")
+            if ring:
+                enc = draw_ring(enc, **ring)
+            enc = draw_title(enc, **{k: v for k, v in P.title.items() if k != "ring"}) * P.fade
+            if P.title.get("opacity", 0) > 0 and P.grain > 0:   # the title card shares the film's grain
+                from comp.comp import grain
+                enc = grain(enc, P.grain * 0.6, max(0.5, P.grain_size * W / 1920.0), P.seed + frame)
         img = to_rgb16(enc) if png16 else to_rgb8(enc)
         return save_image(png, img)
     layers = {}
