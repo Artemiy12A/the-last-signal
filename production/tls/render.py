@@ -68,6 +68,10 @@ def make_spec(shot_id: str, frame: int, q: str) -> FrameSpec:
                      black=p.get("black", False), probe=p.get("probe"))
     spec.comp.seed = frame
     spec._cam = c  # type: ignore[attr-defined]
+    dt = 1.0 / edl.FPS
+    spec._cams3 = [mod.cam_at(t - dt), c, mod.cam_at(t + dt)]  # type: ignore[attr-defined]
+    ship_at = getattr(mod, "ship_at", None)
+    spec._ships3 = [ship_at(t - dt), ship_at(t), ship_at(t + dt)] if ship_at else [np.eye(4)] * 3  # type: ignore[attr-defined]
     return spec
 
 
@@ -136,16 +140,47 @@ def save_image(path: Path, img: np.ndarray) -> Path:
     return path
 
 
-def render_frame(shot_id: str, frame: int, q: str, png16: bool = False, keep_exr: bool = True,
-                 outdir: Path | None = None) -> Path:
-    t0 = time.time()
-    spec = make_spec(shot_id, frame, q)
+def render_frames(shot_id: str, frames: list[int], q: str, png16: bool = False, keep_exr: bool = True,
+                  outdir: Path | None = None, batch: int = 24) -> list[Path]:
+    """Render frames of one shot. Blender layers are rendered in batches (one Blender process per
+    batch, the ship is built/loaded once), then each frame's tracer plate and composite."""
     Q = QUALITY[q]
     W = Q["W"]
     H = int(round(W / 2.39 / 2)) * 2
     outdir = outdir or (OUT / q / shot_id)
     exrdir = outdir / "exr"
     outdir.mkdir(parents=True, exist_ok=True)
+    exrdir.mkdir(parents=True, exist_ok=True)
+    out = []
+    for i in range(0, len(frames), batch):
+        chunk = frames[i:i + batch]
+        specs = [make_spec(shot_id, f, q) for f in chunk]
+        jobs = []
+        for s_ in specs:
+            if s_.blender is not None and not s_.black:
+                from . import blender as bl
+                j = bl.frame_job(s_, q, exrdir)
+                s_._bexr = Path(j["out"])  # type: ignore[attr-defined]
+                if not s_._bexr.exists():
+                    jobs.append(j)
+        if jobs:
+            from . import blender as bl
+            t0 = time.time()
+            bl.run_batch(jobs, q, W, H, exrdir)
+            print(f"{shot_id} blender batch {len(jobs)} frames {time.time() - t0:.1f}s", flush=True)
+        for spec in specs:
+            out.append(_finish_frame(shot_id, spec, q, W, H, outdir, exrdir, png16, keep_exr))
+    return out
+
+
+def render_frame(shot_id: str, frame: int, q: str, png16: bool = False, keep_exr: bool = True,
+                 outdir: Path | None = None) -> Path:
+    return render_frames(shot_id, [frame], q, png16, keep_exr, outdir)[0]
+
+
+def _finish_frame(shot_id, spec, q, W, H, outdir, exrdir, png16, keep_exr) -> Path:
+    t0 = time.time()
+    frame = spec.frame
     png = outdir / f"f{frame:05d}.png"
     if spec.black:
         enc = np.zeros((H, W, 3), np.float32)
@@ -162,7 +197,9 @@ def render_frame(shot_id: str, frame: int, q: str, png16: bool = False, keep_exr
         layers.update(read_exr_layers(Path(sc["out"])))
     if spec.blender is not None:
         from . import blender as bl
-        layers.update(bl.render_ship_layers(spec, q, exrdir, W, H))
+        bexr = getattr(spec, "_bexr", exrdir / f"b{frame:05d}.exr")
+        if bexr.exists():
+            layers.update(bl.read_ship_layers(bexr))
     # resolution-independent comp: scale pixel-sized effects with width
     P = replace(spec.comp)
     s = W / 1920.0
@@ -170,6 +207,7 @@ def render_frame(shot_id: str, frame: int, q: str, png16: bool = False, keep_exr
     P.streak_len *= s
     P.ca *= s
     P.grain_size = max(0.5, P.grain_size * s)
+    P.sprites = [dict(sp, x=sp["x"], y=sp["y"]) for sp in (P.sprites or [])]
     enc = composite(layers, P, spec.t)
     img = to_rgb16(enc) if png16 else to_rgb8(enc)
     png = save_image(png, img)
@@ -209,8 +247,7 @@ def main():
         render_frame(s.id, f, a.q, a.png16, not a.no_exr)
     elif a.cmd == "shot":
         s = edl.SHOT_BY_ID[a.args[0]]
-        for f in range(s.f0, s.f1, a.every):
-            render_frame(s.id, f, a.q, a.png16, not a.no_exr)
+        render_frames(s.id, list(range(s.f0, s.f1, a.every)), a.q, a.png16, not a.no_exr)
     elif a.cmd == "frames":
         for f in parse_range(a.args[0])[:: a.every]:
             s = edl.shot_at(edl.frame_time(f) + 1e-6)

@@ -55,6 +55,12 @@ class NT:
         elif isinstance(val, bpy.types.Node):
             self.nt.links.new(val.outputs[0], sock)
         else:
+            if isinstance(val, (tuple, list)) and len(val) == 3:
+                try:
+                    if len(sock.default_value) == 4:
+                        val = (*val, 1.0)
+                except TypeError:
+                    pass
             sock.default_value = val
 
     def link(self, a, b):
@@ -283,7 +289,7 @@ def _scratch(t: NT, uvv, scale_m=0.9):
 # ------------------------------------------------------------------------------------ MLI
 
 
-def mli(name, kind="gold", tile_m=0.55):
+def mli(name, kind="gold", tile_m=1.05):
     """Crinkled multi-layer insulation. kind: gold (aluminised kapton), silver, black (carbon kapton).
     Uses Seam UV (distance to blanket edge) for stitching, edge folds and tacks."""
     m, t = _new(name)
@@ -292,7 +298,9 @@ def mli(name, kind="gold", tile_m=0.55):
     tex_id = "Foil001" if kind == "silver" else "Foil002"
     fvec = t.mapping(uvv, scale=(1 / tile_m, 1 / tile_m, 1))
     ncol = t.image(tex_id, "NormalGL", fvec)
-    nstr = {"gold": 1.0, "silver": 0.8, "black": 0.8}[kind]
+    nstr = {"gold": 1.0, "silver": 0.95, "black": 0.8}[kind]
+    fvec2 = t.mapping(uvv, scale=(1 / 0.31, 1 / 0.31, 1), rot=(0, 0, 0.7), loc=(0.3, 0.6, 0))
+    fine = t.image(tex_id, "Displacement", fvec2)
     # low-frequency blanket billow on top of the crinkle map
     billow = t.noise(uvv, 1.3, detail=2.0, rough=0.5)
     seam = t.sep(t.uv("Seam"))
@@ -304,29 +312,30 @@ def mli(name, kind="gold", tile_m=0.55):
     stitch = t.mul(band, dash)
     # tacks: 30 cm grid of small buttons (in blanket-local coords from the Seam distances are not
     # enough, so use UV metres; blankets get random UV offsets so the grid shifts per blanket)
-    tv = t.mapping(uvv, scale=(1 / 0.3, 1 / 0.3, 1))
+    tv = t.mapping(uvv, scale=(1 / 0.42, 1 / 0.42, 1))
     fr = t.vmath("FRACTION", tv)
     dctr = t.vmath("LENGTH", t.vmath("SUBTRACT", fr, (0.5, 0.5, 0.0)), out=1)
-    tack = t.math("SUBTRACT", 1.0, t.smooth(dctr, 0.028, 0.036))
-    dimple = t.smooth(dctr, 0.02, 0.2)
+    tack = t.mul(t.math("SUBTRACT", 1.0, t.smooth(dctr, 0.018, 0.024)), 0.8)
+    dimple = t.smooth(dctr, 0.02, 0.16)
     edge_fold = t.math("SUBTRACT", 1.0, t.smooth(edge, 0.0, 0.012))   # 1 at the tucked edge
     # normal: crinkle map + billow + dimples around tacks
     nrm = t.normal_map(ncol, nstr)
-    h = t.add(t.mul(billow, 1.0), t.mul(dimple, 0.6))
-    nrm = t.bump(h, 0.18, 0.02, nrm)
+    nrm = t.bump(fine, 0.22, 0.004, nrm)
+    h = t.add(t.mul(billow, 1.0), t.mul(dimple, 0.5))
+    nrm = t.bump(h, 0.3, 0.03, nrm)
     nrm = t.bump(stitch, 0.4, 0.0006, nrm)
     smudge = _smudge(t, uvv)
     ao = _crevice(t)
     if kind == "gold":
-        c_new = (0.80, 0.47, 0.14)
-        c_old = (0.55, 0.27, 0.06)
-        base = t.mix(t.mul(rnd, 0.55), c_new, c_old)
-        rough = t.add(0.09, t.mul(smudge, 0.35))
-        metal = 1.0
+        c_new = (0.86, 0.56, 0.19)
+        c_old = (0.64, 0.36, 0.10)
+        base = t.mix(t.mul(rnd, 0.6), c_new, c_old)
+        rough = t.add(0.1, t.mul(smudge, 0.16))
+        metal = 0.93
     elif kind == "silver":
-        base = t.mix(t.mul(rnd, 0.4), (0.90, 0.90, 0.92), (0.78, 0.79, 0.82))
-        rough = t.add(0.08, t.mul(smudge, 0.35))
-        metal = 1.0
+        base = t.mix(t.mul(rnd, 0.4), (0.86, 0.87, 0.89), (0.72, 0.73, 0.76))
+        rough = t.add(0.1, t.mul(smudge, 0.18))
+        metal = 0.97
     else:
         base = t.mix(rnd, (0.018, 0.018, 0.02), (0.03, 0.03, 0.032))
         rough = t.add(0.28, t.mul(smudge, 0.3))
@@ -422,20 +431,24 @@ def dish_paint(name):
     d_rad = t.mul(t.math("MINIMUM", petal, t.math("SUBTRACT", 1.0, petal)), t.mul(rad, 2 * math.pi / 24))
     ring = t.math("MINIMUM", t.math("ABSOLUTE", t.sub(rad, 1.55)), t.math("ABSOLUTE", t.sub(rad, 2.85)))
     dmin = t.math("MINIMUM", d_rad, ring)
-    gap = t.math("SUBTRACT", 1.0, t.smooth(dmin, 0.002, 0.005))
+    gap = t.mul(t.math("SUBTRACT", 1.0, t.smooth(dmin, 0.0012, 0.0035)), 0.7)
     uvv = t.uv()
     smudge = _smudge(t, uvv, 2.5)
     pr = t.math("FLOOR", t.mul(t.add(ang, math.pi), 24 / (2 * math.pi)))
     wn = t.n("ShaderNodeTexWhiteNoise", noise_dimensions='1D')
     t.set(wn.inputs["W"], pr)
     pv = wn.outputs["Value"]
-    c = t.mix(pv, (0.66, 0.66, 0.65), (0.72, 0.72, 0.71))
-    c = t.mix(t.mul(smudge, 0.35), c, (0.35, 0.33, 0.30))
-    c = t.mix(gap, c, (0.04, 0.04, 0.04))
-    r = t.add(0.55, t.mul(smudge, 0.15))
+    c = t.mix(pv, (0.56, 0.555, 0.54), (0.64, 0.635, 0.62))
+    c = t.mix(t.mul(smudge, 0.4), c, (0.36, 0.34, 0.31))
+    c = t.mix(gap, c, t.mix(0.5, c, (0.25, 0.25, 0.25), 'MULTIPLY'))
+    r = t.add(0.36, t.add(t.mul(smudge, 0.2), t.mul(pv, 0.08)))
     h = t.sub(t.mul(t.noise(uvv, 150.0, 2), 0.2), t.mul(gap, 1.0))
-    nrm = t.bump(h, 0.15, 0.002)
-    p = t.principled(base=c, rough=r, normal=nrm)
+    h = t.add(h, t.mul(t.noise(oc, 1.1, 2), 1.5))
+    nrm = t.bump(h, 0.12, 0.002)
+    if USE_AO:
+        ao = _crevice(t, 0.4)
+        c = t.mix(t.mul(t.math("SUBTRACT", 1.0, ao), 0.5), c, (0.1, 0.1, 0.1))
+    p = t.principled(base=c, rough=r, normal=nrm, spec=0.5)
     t.output(p)
     return m
 
@@ -584,7 +597,7 @@ def lamp(name, color, strength, prop, ctrl, lens_col=(0.8, 0.8, 0.8)):
     return m
 
 
-def ion_grid(name, ctrl, strength=38.0, color=(0.30, 0.52, 1.0), grid_r=0.62):
+def ion_grid(name, ctrl, strength=9.0, color=(0.22, 0.46, 1.0), grid_r=0.62):
     """Molybdenum accelerator grid with a hexagonal aperture array (object space, grid in local XY).
     Apertures glow with the beam plasma when CTRL_engine > 0, brighter at the centre."""
     m, t = _new(name)
@@ -620,7 +633,7 @@ def ion_grid(name, ctrl, strength=38.0, color=(0.30, 0.52, 1.0), grid_r=0.62):
     return m
 
 
-def plume(name, ctrl, strength=1.6, color=(0.30, 0.50, 1.0), r0=0.55, spread=0.14, length=5.0):
+def plume(name, ctrl, strength=1.1, color=(0.26, 0.48, 1.0), r0=0.55, spread=0.14, length=4.5):
     """Emission-only volume for an ion-beam plume. Object local +Z runs downstream from the grid."""
     m, t = _new(name)
     k = t.ctrl("engine", ctrl)
@@ -681,7 +694,7 @@ def build_library(ctrl) -> dict:
     M["dish_white"] = dish_paint("SHIP_Dish_White")
     M["alu"] = brushed_alu("SHIP_Alu_Brushed")
     M["alu_anod"] = anodized("SHIP_Alu_Anodized")
-    M["alu_polish"] = brushed_alu("SHIP_Alu_Polished", base=(0.88, 0.89, 0.90), rough=0.03, aniso=0.2)
+    M["alu_polish"] = brushed_alu("SHIP_Alu_Polished", base=(0.88, 0.89, 0.90), rough=0.12, aniso=0.5)
     M["alu_dark"] = anodized("SHIP_Alu_DarkAnod", base=(0.10, 0.10, 0.11), rough=0.38)
     M["composite"] = composite("SHIP_Composite")
     M["radiator"] = radiator("SHIP_Radiator")

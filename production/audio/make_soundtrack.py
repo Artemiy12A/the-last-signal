@@ -139,6 +139,10 @@ class Mix:
             if buf is None:
                 continue
             seg = dsp.varispeed(buf, pos)
+            if getattr(self, "warp_gain", None):
+                wg = self.warp_gain
+                g = db(np.interp(np.arange(i0, i1) / SR, [a for a, _ in wg], [b for _, b in wg]))
+                seg = seg * g[:, None]
             buf[i0:i1] = seg
             buf[i1:] = 0.0
         self.event(self.warp[0], "time_stretch_start", end_rate=round(float(np.diff(pos[-2:])[0]), 4))
@@ -225,9 +229,11 @@ def phone_harmonics(x: np.ndarray) -> np.ndarray:
 def master_segment(x: np.ndarray, gain_db: float) -> tuple[np.ndarray, dict]:
     y = x * db(gain_db)
     y = y + phone_harmonics(y) * db(-6.0)
-    y, gr = dsp.compressor(y, thresh_db=-20.0, ratio=2.0, attack=0.03, release=0.35, knee_db=8.0)
+    y, gr = dsp.compressor(y, thresh_db=-15.0, ratio=1.6, attack=0.03, release=0.35, knee_db=10.0,
+                             sc_hp=120.0)
     y, lg = dsp.limiter(y, ceiling_db=CEILING_DBTP, lookahead=0.004, release=0.12)
-    return y, {"comp_max_gr_db": float(-gr.min()), "lim_max_gr_db": float(-dsp.to_db(lg.min()))}
+    return y, {"comp_max_gr_db": float(-gr.min()), "lim_max_gr_db": float(-dsp.to_db(lg.min())),
+               "_comp_db": gr, "_lim_db": dsp.to_db(lg)}
 
 
 def master(mix_sum: np.ndarray, silence) -> tuple[np.ndarray, float, dict]:
@@ -241,9 +247,11 @@ def master(mix_sum: np.ndarray, silence) -> tuple[np.ndarray, float, dict]:
     for it in range(6):
         out = np.zeros_like(mix_sum)
         info = {}
+        comp_db, lim_db = np.zeros(N), np.zeros(N)
         for a, b in segs:
             y, inf = master_segment(mix_sum[a:b], g)
             out[a:b] = y
+            comp_db[a:b], lim_db[a:b] = inf.pop("_comp_db"), inf.pop("_lim_db")
             for k, v in inf.items():
                 info[k] = max(info.get(k, 0.0), v)
         lu = loudness.integrated(out)
@@ -252,6 +260,11 @@ def master(mix_sum: np.ndarray, silence) -> tuple[np.ndarray, float, dict]:
         g += TARGET_LUFS - lu
     out[s0:s1] = 0.0
     info["iterations"] = it + 1
+    # gain-reduction traces at 20 Hz (min over each 50 ms) for the review plots
+    h = SR // 20
+    k = N // h
+    info["_gr"] = {"rate": 20, "comp_db": np.round(comp_db[: k * h].reshape(k, h).min(1), 2).tolist(),
+                   "lim_db": np.round(lim_db[: k * h].reshape(k, h).min(1), 2).tolist()}
     return out, g, info
 
 
@@ -303,11 +316,13 @@ def render(out_dir: Path, use_recordings: bool = True) -> dict:
         "integrated_lufs": round(loudness.integrated(out), 2),
         "true_peak_dbtp": round(dsp.true_peak_db(out), 2),
         "lra_lu": round(loudness.lra(out), 2),
-        "master_gain_db": round(g_db, 2), "stem_scale": round(stem_scale, 4), **{k: round(v, 2) for k, v in info.items()},
+        "master_gain_db": round(g_db, 2), "stem_scale": round(stem_scale, 4),
+        **{k: round(v, 2) for k, v in info.items() if not k.startswith("_")},
         "silence": list(mix.silence), "render_seconds": round(time.time() - t_start, 1),
         "recordings": use_recordings,
     }
     (out_dir / "render_meta.json").write_text(json.dumps(meta, indent=2))
+    (out_dir / "master_gr.json").write_text(json.dumps(info["_gr"]))
     (out_dir / "cuesheet.json").write_text(json.dumps(sorted(mix.events, key=lambda e: e["t"]), indent=1))
     print(json.dumps(meta, indent=2))
     return meta

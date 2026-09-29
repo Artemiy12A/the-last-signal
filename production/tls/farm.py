@@ -102,22 +102,34 @@ def _runs(fs: list[int], step: int) -> list[tuple[int, int]]:
 def shard(q: str, frames_spec: str, out: Path, deadline_min: float = 330.0, every: int = 1):
     """Render frames (resumable: existing PNGs are kept) then encode ProRes 4444 segments per
     contiguous run. Stops early (cleanly) if the deadline approaches."""
-    from .render import render_frame
+    from .render import render_frames
     t_start = time.time()
     frames = parse_frames(frames_spec)
     fdir = OUT / q / "_frames"
     fdir.mkdir(parents=True, exist_ok=True)
     done = []
+    # group consecutive frames by shot so each shot's Blender work is batched
+    groups = []
     for f in frames:
-        png = fdir / f"f{f:05d}.ppm"
-        if not png.exists():
+        sid = edl.shot_at(edl.frame_time(f) + 1e-6).id
+        if groups and groups[-1][0] == sid:
+            groups[-1][1].append(f)
+        else:
+            groups.append((sid, [f]))
+    stop = False
+    for sid, fs in groups:
+        for i in range(0, len(fs), 12):
+            chunk = [f for f in fs[i:i + 12] if not (fdir / f"f{f:05d}.ppm").exists()]
             if (time.time() - t_start) / 60 > deadline_min:
-                print(f"deadline reached before frame {f}", flush=True)
+                print(f"deadline reached before frame {fs[i]}", flush=True)
+                stop = True
                 break
-            s = edl.shot_at(edl.frame_time(f) + 1e-6)
-            p = render_frame(s.id, f, q, png16=True, keep_exr=False, outdir=OUT / q / s.id)
-            shutil.move(str(p), png)
-        done.append(f)
+            if chunk:
+                for p in render_frames(sid, chunk, q, png16=True, keep_exr=False, outdir=OUT / q / sid):
+                    shutil.move(str(p), fdir / p.name)
+            done += fs[i:i + 12]
+        if stop:
+            break
     out.mkdir(parents=True, exist_ok=True)
     for a, b in _runs(done, every):
         last = min(b + every - 1, edl.NFRAMES - 1)

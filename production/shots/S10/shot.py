@@ -11,6 +11,7 @@ import numpy as np
 from comp.comp import CompParams
 from tls import edl, world
 from tls.camera import Cam, Track, look, norm, orbit_pos, smoothstep, spring_follow, v3
+from tls.shotkit import controls, ship_matrix
 
 SHOT = edl.SHOT_BY_ID["S10"]
 T0, T1 = SHOT.start, SHOT.end
@@ -30,8 +31,17 @@ def cam_at(t: float) -> Cam:
     u = np.cross(r, f)
     a = math.radians(float(_tilt(t)[0]))
     f2 = norm(math.cos(a) * f + math.sin(a) * u)
-    c = Cam(fwd=f2, up=u, pos_bh=p, hfov=float(fov(t)))
+    c = Cam(fwd=f2, up=u, pos_bh=p, pos_ship=crane(t), hfov=float(fov(t)))
     return c.with_drift(t, 0.05, seed=10)
+
+
+# the crane: from low behind the ship (its hull hides the hole) up and over it
+crane = Track([(T0, v3(0.0, -34.0, 2.5)), (T0 + 1.0, v3(0.0, -35.0, 4.0)), (T0 + 3.6, v3(0.0, -38.0, 21.0)),
+               (T1, v3(0.0, -44.0, 30.0))], ease=0.0)
+
+
+def ship_at(t):
+    return ship_matrix(pitch=0.5, roll=-1.5 + 0.5 * math.sin(0.3 * t))
 
 
 def params(t: float, q: str) -> dict:
@@ -40,4 +50,7 @@ def params(t: float, q: str) -> dict:
                    halation=0.05, vignette=0.3, punch=0.15, look_sat=1.08, white=(1.0, 0.97, 0.92))
     # the braam lands with the reveal: a breath of overexposure that settles
     P.exposure += 0.35 * math.exp(-max(t - (T0 + 2.8), 0) / 1.2) * smoothstep(T0 + 1.8, T0 + 2.8, t)
-    return {"comp": P, "tracer": {}}
+    bl = {"controls": controls(t, engine=0.0), "probe": {"pos_bh": [float(x) for x in orbit_pos(float(dist(t)), float(incl(t)), -90.0)],
+                                                        "strength": 1.0},
+          "keys": [], "hide_ship": t > T0 + 5.0}
+    return {"comp": P, "tracer": {}, "blender": bl}

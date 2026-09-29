@@ -413,14 +413,16 @@ def _smooth_attack_release(x: np.ndarray, att: float, rel: float, rate: float) -
 
 
 def compressor(x: np.ndarray, thresh_db: float, ratio: float, attack: float = 0.03,
-               release: float = 0.3, knee_db: float = 6.0, ctrl_rate: int = 1000) -> tuple[np.ndarray, np.ndarray]:
-    """Feed-forward RMS bus compressor. Returns (output, gain_db_per_sample)."""
+               release: float = 0.3, knee_db: float = 6.0, ctrl_rate: int = 1000,
+               sc_hp: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
+    """Feed-forward RMS bus compressor (optional sidechain high-pass so the sub does not pump the
+    bus). Returns (output, gain_db_per_sample)."""
     n = len(x)
     hop = SR // ctrl_rate
-    m = x if x.ndim == 1 else np.max(np.abs(x), axis=1)
+    sc = hp(x, sc_hp, order=2) if sc_hp > 0 else x
     nb = (n + hop - 1) // hop
     pad = np.zeros(nb * hop)
-    pad[:n] = m * m if x.ndim == 1 else (x * x).mean(axis=1)
+    pad[:n] = sc * sc if x.ndim == 1 else (sc * sc).mean(axis=1)
     lvl = 10 * np.log10(pad.reshape(nb, hop).mean(axis=1) + 1e-20)
     lvl = _smooth_attack_release(lvl, attack, release, ctrl_rate)
     over = lvl - thresh_db

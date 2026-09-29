@@ -51,6 +51,7 @@ class CompParams:
     fade: float = 1.0                         # 0 = black
     seed: int = 0
     title: dict | None = None
+    sprites: list | None = None               # point lights in the far plate: {x, y (0..1), rgb, sigma_px}
 
 
 # ------------------------------------------------------------------ helpers
@@ -148,31 +149,49 @@ def grain(disp: np.ndarray, amount: float, size: float, seed: int) -> np.ndarray
     return np.clip(disp + g, 0, 1)
 
 
-def interference_fx(disp: np.ndarray, amt: float, seed: int, t: float) -> np.ndarray:
-    """The signal leaking into the image: a few horizontal tearing bands with slight chroma offset and
-    an exposure dip. Subtle by design; strong only at amt ~ 1."""
+def interference_fx(enc: np.ndarray, amt: float, seed: int, t: float) -> np.ndarray:
+    """The signal leaking into the image (display-encoded input). Analog, restrained: thin horizontal
+    tears that slip sideways, a slow rolling band of fine noise, a brief exposure dip, and at high
+    strength a pixel of lateral chroma slip and vertical jitter. Never blocky, never RGB bars."""
     if amt <= 0.01:
-        return disp
-    H, W = disp.shape[:2]
+        return enc
+    H, W = enc.shape[:2]
     rng = np.random.default_rng(seed * 104729 + 7)
-    out = disp.copy()
-    nb = int(1 + amt * 7)
-    for _ in range(nb):
+    out = enc.copy()
+    s = W / 1920.0
+    for _ in range(int(2 + amt * 10)):
         y0 = int(rng.uniform(0, H))
-        h = int(rng.uniform(2, 6 + 30 * amt))
-        y1 = min(H, y0 + h)
-        sh = int(rng.normal(0, 3 + 22 * amt))
-        band = np.roll(disp[y0:y1], sh, axis=1)
-        if amt > 0.4:
-            band[..., 0] = np.roll(band[..., 0], int(2 + 6 * amt), axis=1)
-            band[..., 2] = np.roll(band[..., 2], -int(2 + 6 * amt), axis=1)
-        out[y0:y1] = band * (1.0 + 0.25 * amt * rng.uniform(-1, 1))
-    # faint rolling scan noise
-    yy = np.arange(H, dtype=np.float32)[:, None, None]
-    roll = 0.5 + 0.5 * np.sin(2 * math.pi * (yy / H * 3.0 - t * 1.7))
-    noise = rng.standard_normal((H, 1, 1)).astype(np.float32)
-    out = out * (1.0 - 0.18 * amt * roll) + 0.012 * amt * noise * roll
+        h = max(1, int(rng.uniform(1, 2 + 5 * amt) * s))
+        sh = int(round(rng.normal(0, (2 + 14 * amt) * s)))
+        out[y0:y0 + h] = np.roll(enc[y0:y0 + h], sh, axis=1)
+    yy = np.arange(H, dtype=np.float32)[:, None, None] / H
+    band = np.exp(-((yy - ((t * 0.37) % 1.3 - 0.15)) / 0.06) ** 2)
+    fine = rng.standard_normal((H, W, 1)).astype(np.float32)
+    out = out * (1.0 - 0.10 * amt * float(rng.uniform(0.3, 1.0))) + band * (0.035 * amt + 0.03 * amt * fine)
+    if amt > 0.5:
+        k = (amt - 0.5) * 2
+        dx = int(round(1.5 * k * s)) or 1
+        out[..., 0] = np.roll(out[..., 0], dx, axis=1)
+        out[..., 2] = np.roll(out[..., 2], -dx, axis=1)
+        out = np.roll(out, int(round(rng.normal(0, 1.5 * k * s))), axis=0)
     return np.clip(out, 0, 1)
+
+
+def render_sprites(H: int, W: int, sprites: list) -> np.ndarray:
+    """Point lights (e.g. a distant ship's strobe) as small Gaussian PSFs, energy normalised."""
+    out = np.zeros((H, W, 3), np.float32)
+    for sp in sprites:
+        x, y = sp["x"] * W, sp["y"] * H
+        sig = max(0.5, float(sp.get("sigma_px", 1.0)))
+        r = int(math.ceil(sig * 4))
+        x0, x1 = max(0, int(x) - r), min(W, int(x) + r + 2)
+        y0, y1 = max(0, int(y) - r), min(H, int(y) + r + 2)
+        if x0 >= x1 or y0 >= y1:
+            continue
+        yy, xx = np.mgrid[y0:y1, x0:x1].astype(np.float32)
+        g = np.exp(-((xx + 0.5 - x) ** 2 + (yy + 0.5 - y) ** 2) / (2 * sig * sig)) / (2 * math.pi * sig * sig)
+        out[y0:y1, x0:x1] += g[..., None] * np.asarray(sp["rgb"], np.float32)
+    return out
 
 
 def _gain(v):
@@ -192,12 +211,19 @@ def composite(layers: dict, P: CompParams, t: float = 0.0) -> np.ndarray:
     for n in ("sky", "stars", "haze", "disk", "beacon"):
         if n in layers:
             far += layers[n][..., :3] * _gain(G.get(n, 1.0))
+    if P.sprites:
+        far = far + render_sprites(H, W, P.sprites)
     far = dof(far, P.coc_px, P.bokeh_ratio)
     img = far
     if "ship" in layers:
         s = layers["ship"]
         a = s[..., 3:4]
-        img = img * (1.0 - a) + s[..., :3] * _gain(G.get("ship", 1.0))
+        if all(k in layers for k in ("ship_env", "ship_key", "ship_lamps")):
+            rgb = (layers["ship_env"] * _gain(G.get("ship_env", 1.0)) + layers["ship_key"] * _gain(G.get("ship_key", 1.0))
+                   + layers["ship_lamps"] * _gain(G.get("ship_lamps", 1.0)))
+        else:
+            rgb = s[..., :3]
+        img = img * (1.0 - a) + rgb * _gain(G.get("ship", 1.0))
     if "ship_emit" in layers:
         img = img + layers["ship_emit"] * _gain(G.get("ship_emit", 1.0))
     if "fg" in layers:

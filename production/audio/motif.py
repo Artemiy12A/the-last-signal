@@ -59,7 +59,7 @@ def voice(long: bool, s: float, g: float, seed: str, detune_cents: float = 0.0):
     sub = np.sin(0.25 * ph)                          # two octaves under the root (D1 for the signal)
     env = dsp.ar(n, att, body, tau)
     env_sub = dsp.ar(n, att * 4.0 + 0.01 * w, body, tau * 2.0)
-    x = env * (tone + 0.5 * w * deep) + 0.42 * w * env_sub * sub
+    x = env * (tone + 0.4 * w * deep) + 0.24 * w * env_sub * sub
     # the click: a tiny HP noise burst (stretched and lowered with everything else)
     r = dsp.rng("click:" + seed)
     click = dsp.hp(r.standard_normal(n) * np.exp(-t / (0.0006 * s)), 2500.0 * g, order=2)

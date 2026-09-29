@@ -122,6 +122,10 @@ class MeshBuilder:
             self.fflat.append(flat)
         return base
 
+    def displace_last(self, fn):
+        """Apply fn(verts (n,3)) -> verts to the most recently added part (in place)."""
+        self.vs[-1] = fn(self.vs[-1])
+
     def empty(self) -> bool:
         return not self.faces
 

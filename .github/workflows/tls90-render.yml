@@ -211,6 +211,7 @@ jobs:
           path: segs
           merge-multiple: true
       - name: Soundtrack
+        continue-on-error: true
         run: |
           if [ -f production/audio/make_soundtrack.py ]; then python production/audio/make_soundtrack.py; fi
       - name: Assemble, encode
