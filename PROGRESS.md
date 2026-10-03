@@ -2,10 +2,11 @@
 
 ## Current phase
 
-**Phase 3: review round 1 done; preview cut 2 (960 px, every frame, new soundtrack) on the farm as
-`tls90-preview-2`. preview-1 was cancelled mid-render: it showed the pre-review film.**
+**Phase 3: preview cut 2 published (2026-10-03). Next: review round 2, then the final render.**
 
 Previews published so far:
+- `tls90-preview-2` (preview 960 px, every frame, sound; after review round 1): https://github.com/Artemiy12A/the-last-signal/releases/tag/tls90-preview-2
+  — run 37151490629, 2 h 08 min on 20 runners, 90.000 s, H.264 + AAC, −14.1 LUFS.
 - `tls90-previs-1` (draft, every 2nd frame, no final ship/sound): https://github.com/Artemiy12A/the-last-signal/releases/tag/tls90-previs-1
 
 ## Done
@@ -45,8 +46,8 @@ Previews published so far:
 
 ## Next
 
-1. Watch `tls90-preview-2` when it lands (run 37151490629): contact sheet, cut strips
-   (`tls.review strips`), camera curves, audio plots; refresh the bible's stills from it.
+1. preview-2 checked: sheet and cut strips clean, S14→S15 match cut within ~8% of frame width
+   (tune), refresh the bible's stills from its release stills.
 2. Review round 2 on the preview-2 frames (most passes on S10 reveal, S11 scale, S15 fall, TITLE).
 3. Final render: `render-request.json` quality final, jobs 40 (20 run at once; ~3 h per shard by the
    measured S10 frame, inside the 350 min limit), then the final release + README link at the top.

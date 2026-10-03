@@ -3,8 +3,8 @@
 > **The 90-second remake is in production** (`production/`, see `PROGRESS.md`).
 > Production bible — logline, shot plan, sound, status, preview links:
 > https://claude.ai/code/artifact/4cf29026-e94a-453a-8bfb-2f83f1113f6d
-> Latest preview: [tls90-previs-1](https://github.com/Artemiy12A/the-last-signal/releases/tag/tls90-previs-1)
-> (preview cut 1 rendering). The original 20-second film below stays untouched.
+> Latest preview: [tls90-preview-2](https://github.com/Artemiy12A/the-last-signal/releases/tag/tls90-preview-2)
+> (full 90 s, 960 px, with sound). The original 20-second film below stays untouched.
 
 A 20-second cinematic sci-fi teaser. A tiny deep-space probe answers a faint
 signal and drifts toward a supermassive black hole, and the black hole is the
