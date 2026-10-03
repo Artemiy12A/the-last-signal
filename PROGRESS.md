@@ -45,13 +45,12 @@ Previews published so far:
 
 ## Next
 
-1. Watch `tls90-preview-1` (contact sheet, cut strips, camera curves, audio plots).
-2. Independent reviewer agents on preview stills vs `docs/reference/` — most iterations on S10
-   reveal, S11 scale, S15 climax, TITLE.
-3. Known look issue: disk texture reads as brushed/"vinyl" streaks in close views (S12, S15) —
-   more clumps/lanes, less azimuthal coherence.
-4. Final render (2 waves if needed), final release, README link, Claude Docs bible, Canva poster +
-   vertical cover.
+1. Watch `tls90-preview-2` when it lands (run 37151490629): contact sheet, cut strips
+   (`tls.review strips`), camera curves, audio plots; refresh the bible's stills from it.
+2. Review round 2 on the preview-2 frames (most passes on S10 reveal, S11 scale, S15 fall, TITLE).
+3. Final render: `render-request.json` quality final, jobs 40 (20 run at once; ~3 h per shard by the
+   measured S10 frame, inside the 350 min limit), then the final release + README link at the top.
+4. Canva 2:3 poster + 9:16 cover from real final stills; bible updated.
 
 ## Known problems
 
