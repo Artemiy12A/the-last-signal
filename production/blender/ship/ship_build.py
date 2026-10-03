@@ -426,12 +426,8 @@ def build_service(B, rng, lights):
         rcs_quad(B, xf, f"RCS {i + 1}A")
     # dorsal xenon strobe + stencils next to it
     bxf = surface_frame(90, SVC_A, 10.9)
-    c = lamp_unit(B, bxf, "beacon", r=0.055, mast=0.28)
-    for k in range(3):
-        a = 2 * math.pi * k / 3 + 0.4
-        p0 = (bxf @ np.array([0.085 * math.cos(a), 0.085 * math.sin(a), 0.33, 1.0]))[:3]
-        p1 = (bxf @ np.array([0.0, 0.0, 0.46, 1.0]))[:3]
-        d.tube(p0, p1, 0.005, "alu_anod", segs=6)
+    # a flush xenon dome on a short pedestal (review round 2: the mast + wire cage read as a garden lamp)
+    c = lamp_unit(B, bxf, "beacon", r=0.09, mast=0.04)
     lights.append(("Beacon_Dorsal", "beacon", c, (0.82, 0.88, 1.0), 2600.0, 0.03))
     o = surface_frame(90, SVC_A + 0.0008, 11.55)[:3, 3]
     place_text(st, "LSV-7", 0.16, o + np.array([0.55, 0, 0]), (-1, 0, 0), (0, -1, 0), "stencil_black", FONT_SANS,

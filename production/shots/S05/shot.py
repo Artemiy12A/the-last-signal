@@ -31,4 +31,5 @@ def params(t, q):
                    white=(1.0, 0.97, 0.94), interference=0.25 * edl.interference(t))
     bl = {"controls": controls(t, engine=0.2), "probe": probe(float(dist(t)), strength=1.0, incl=88.8),
           "keys": []}
-    return {"comp": P, "tracer": {"disk": {"h_over_r": 0.010}}, "blender": bl}
+    # no disk at all: a zero-gain disk still blocked starlight (a black bar through the shadow)
+    return {"comp": P, "tracer": {"disk": {"on": False}}, "blender": bl}

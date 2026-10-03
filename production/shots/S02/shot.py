@@ -32,7 +32,8 @@ def params(t, q):
     P = CompParams(exposure=-0.9, gains={"sky": 1.0, "stars": 1.4, "ship_env": 1.0, "ship_key": 1.0, "ship_lamps": 1.0},
                    coc_px=c.coc_inf_px(), bloom=0.04, streak=0.06, streak_threshold=8.0, halation=0.05,
                    vignette=0.34, punch=0.14, white=(0.97, 0.98, 1.02))
-    bl = {"controls": controls(t), "world": {"color": [0.0004, 0.0005, 0.0007], "strength": 1.0},
+    bl = {"controls": controls(t, nav=0.0),   # no green leak on the foil
+          "world": {"color": [0.0004, 0.0005, 0.0007], "strength": 1.0},
           "keys": [warm_key_from_hole(strength=1.6, color=(1.0, 0.86, 0.7), angle=0.35, dir_=(0.95, 0.35, 0.28)),   # raking: crinkles alternate spec and black
                    {"dir": [0.8, -0.3, 0.55], "color": [0.62, 0.72, 1.0], "strength": 0.04, "angle": 12}]}
     return {"comp": P, "tracer": {"disk": {"on": False}}, "blender": bl}

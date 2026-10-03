@@ -1,5 +1,6 @@
-"""S09 — BREATH (46.0–48.5). Near-silence. Low behind the ship: its dish silhouetted against a glowing
-veil of dust with the hole's light behind it."""
+"""S09 — BREATH. Near-silence. Low behind the ship: its dish silhouetted against the hole's glow, thrown so
+far out of focus (220 px bokeh) that it is only a warm veil: the hole's shape is not seen before S10
+(review round 2)."""
 from comp.comp import CompParams
 from tls import edl
 from tls.camera import Cam, Track, look, v3
@@ -24,8 +25,8 @@ def ship_at(t):
 def params(t, q):
     P = CompParams(exposure=-1.0, gains={"sky": 0.3, "stars": 0.4, "disk": 0.6, "haze": 3.0,
                                          "ship_env": 0.6, "ship_key": 0.5, "ship_lamps": 1.0},
-                   coc_px=70.0, bloom=0.08, glare=0.03, streak=0.04, halation=0.06, vignette=0.2, punch=0.2,
+                   coc_px=220.0, bloom=0.08, glare=0.03, streak=0.04, halation=0.06, vignette=0.2, punch=0.2,
                    white=(1.0, 0.93, 0.84))
     bl = {"controls": controls(t, engine=0.0, flicker=False), "world": {"color": [0.0, 0.0, 0.0]},
-          "keys": [{"dir": [0.0, 1.0, 0.15], "color": [1.0, 0.72, 0.45], "strength": 1.5, "angle": 6.0}]}
+          "keys": [{"dir": [0.0, 1.0, 0.15], "color": [1.0, 0.72, 0.45], "strength": 3.0, "angle": 6.0}]}
     return {"comp": P, "tracer": {"disk": {"haze": 0.02, "haze_h": 0.25}}, "blender": bl}

@@ -17,9 +17,10 @@ SHOT = edl.SHOT_BY_ID["S10"]
 T0, T1 = SHOT.start, SHOT.end
 
 # distance (M), inclination (deg) and look-target height (M) over time
-dist = Track([(T0, 78.0), (T0 + 3.0, 76.0), (T1, 66.0)], ease=0.6)
+dist = Track([(T0, 78.0), (T0 + 1.8, 76.5), (T1, 66.0)], ease=0.6)
 incl = Track([(T0, 86.3), (T1, 85.6)])
-tilt = Track([(T0, -9.0), (T0 + 1.2, -7.5), (T0 + 3.4, 0.0), (T1, 0.4)])     # degrees of tilt below the hole
+# review round 2: the hole clears the hull ~0.3 s after the hit (was ~2 s late)
+tilt = Track([(T0, -6.0), (T0 + 0.6, -4.2), (T0 + 1.6, 0.0), (T1, 0.4)])     # degrees of tilt below the hole
 fov = Track([(T0, 40.0), (T1, 35.0)], ease=0.5)
 _tilt = spring_follow(lambda t: np.array([float(tilt(t))]), T0, T1 + 0.5, zeta=0.85, fn=0.45)
 
@@ -36,7 +37,7 @@ def cam_at(t: float) -> Cam:
 
 
 # the crane: from low behind the ship (its hull hides the hole) up and over it
-crane = Track([(T0, v3(0.0, -34.0, 2.5)), (T0 + 1.0, v3(0.0, -35.0, 4.0)), (T0 + 3.6, v3(0.0, -38.0, 21.0)),
+crane = Track([(T0, v3(0.0, -34.0, 6.0)), (T0 + 0.6, v3(0.0, -35.5, 10.0)), (T0 + 1.8, v3(0.0, -38.0, 21.0)),
                (T1, v3(0.0, -44.0, 30.0))], ease=0.0)
 
 
@@ -52,6 +53,6 @@ def params(t: float, q: str) -> dict:
     P.exposure += 0.35 * math.exp(-max(t - (T0 + 2.8), 0) / 1.2) * smoothstep(T0 + 1.8, T0 + 2.8, t)
     bl = {"controls": controls(t, engine=0.0, nav=0.3), "probe": {"pos_bh": [float(x) for x in orbit_pos(float(dist(t)), float(incl(t)), -90.0)],
                                                         "strength": 1.0},
-          "keys": [{"dir": [0.0, 1.0, -0.05], "color": [1.0, 0.8, 0.58], "strength": 3.0, "angle": 2.0}],   # the hole rims the ship
+          "keys": [{"dir": [0.0, 1.0, -0.05], "color": [1.0, 0.8, 0.58], "strength": 9.0, "angle": 20.0}],   # the disk as a broad source   # the hole rims the ship
           "hide_ship": t > T0 + 5.0}
     return {"comp": P, "tracer": {}, "blender": bl}

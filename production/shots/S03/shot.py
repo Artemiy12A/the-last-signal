@@ -43,7 +43,7 @@ def params(t, q):
                    white=(0.97, 0.98, 1.02), interference=0.25 * edl.interference(t))
     bl = {"controls": ctl, "world": {"color": [0.0004, 0.0005, 0.0007]},
           # one hard raking key, almost no fill (the far side falls to black), a cool rim from behind
-          "keys": [warm_key_from_hole(strength=2.8, color=(1.0, 0.84, 0.66), angle=0.5, dir_=(-0.9, 0.45, 0.4)),
+          "keys": [warm_key_from_hole(strength=0.9, color=(1.0, 0.84, 0.66), angle=0.5, dir_=(-0.9, 0.45, 0.4)),
                    {"dir": [-0.7, -0.5, 0.4], "color": [0.62, 0.72, 1.0], "strength": 0.06, "angle": 10},
-                   {"dir": list(map(float, _rim(t))), "color": [0.7, 0.8, 1.0], "strength": 1.6, "angle": 1.0}]}
+                   {"dir": list(map(float, _rim(t))), "color": [0.85, 0.85, 1.0], "strength": 4.5, "angle": 1.0}]}   # backlight carries it
     return {"comp": P, "tracer": {"disk": {"on": False}}, "blender": bl}

@@ -57,17 +57,35 @@ def cam_at(t: float) -> Cam:
     return c.with_drift(t, 0.03, seed=15)
 
 
+SPAN_M = 32.5                  # camera coordinate time covered by the shot (M)
+
+
+def _w(u: float) -> float:
+    """Front-loaded fall: most of the image's travel early, then it visibly freezes (review round 2)."""
+    return 1.0 - (1.0 - u) ** 2.2
+
+
+def _t_cam(t: float) -> float:
+    return T_CAM0 + SPAN_M * _w(SHOT.local(t))
+
+
 def params(t: float, q: str) -> dict:
+    from tls.render import QUALITY
     u = SHOT.local(t)
     wl = worldline()
     # flash timing = the EDL's motif on the steered ship clock (physics P21); position, lensing, colour
-    # (T * g) and dimming (g^p_g) = the worldline, traced. Between flashes a faint ember: the ship's hull
-    # and running lights, so the point never leaves the frame before the cut.
+    # (T * g) and dimming come from the traced worldline. A faint ember between flashes keeps the point.
     env = edl.beacon_intensity(t)
+    # anti-aliasing: the emitter is never smaller than ~2.2 px at this resolution, flux conserved (the
+    # tracer's emitter is a 3-D Gaussian: its flux goes as intensity * sigma^3)
+    W = QUALITY[q]["W"]
+    sigma = max(0.04, 2.2 * math.radians(36.0) / W * 60.0)
+    dt = 1.0 / edl.FPS
+    span = (_t_cam(min(t + dt / 4, T1)) - _t_cam(max(t - dt / 4, T0)))      # 180-degree shutter, in M
     beacon = {
-        "table": wl.tolist(), "t_cam": T_CAM0 + BEACON_RATE * (t - T0), "t_span": BEACON_RATE * 0.5 / edl.FPS,
-        "sigma": 0.04, "intensity": 2200.0, "T": 6000.0, "p_g": 2.0, "decay": 0.35,
-        "steady": 0.035 + env, "pulses": [],
+        "table": wl.tolist(), "t_cam": _t_cam(t), "t_span": max(span, 1e-3),
+        "sigma": sigma, "intensity": 800.0 * (0.04 / sigma) ** 3, "T": 6000.0, "p_g": 1.5, "decay": 0.35,
+        "steady": 0.004 + env, "pulses": [],
     }
     red = smoothstep(0.35, 1.0, u)
     P = CompParams(exposure=-0.3 - 0.7 * red,

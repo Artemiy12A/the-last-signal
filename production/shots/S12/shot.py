@@ -14,14 +14,14 @@ SHOT = edl.SHOT_BY_ID["S12"]
 T0, T1 = SHOT.start, SHOT.end
 r = Track([(T0, 16.5), (T1, 14.0)], ease=0.2)
 h = Track([(T0, 0.9), (T1, 0.75)])   # high enough that rays to the hole clear the disk's upper layers
-az = Track([(T0, -84.0), (T1, -104.0)], ease=0.15)   # against the disk's rotation: relative speed
+az = Track([(T0, -88.0), (T1, -96.0)], ease=0.15)    # against the disk's rotation (gentler: no star-trail swirl)
 
 
 def cam_at(t):
     rr = float(r(t))
     a = math.radians(float(az(t)))
     pb = v3(rr * math.cos(a), rr * math.sin(a), float(h(t)))
-    f = norm(look(pb, (0, 0, 4.6)))           # look up: the disk floor is a low horizon, the arch towers
+    f = norm(look(pb, (0, 0, 2.6)))           # the disk floor fills the lower ~40%, the arch towers above
     up = norm(rot(f, math.radians(-9.0)) @ v3(0, 0, 1))
     c = Cam(fwd=f, up=up, pos_bh=pb, pos_ship=v3(8.0, -160.0, -10.0), hfov=72.0)
     return c.with_drift(t, 0.08, seed=12, vib_px=0.35)

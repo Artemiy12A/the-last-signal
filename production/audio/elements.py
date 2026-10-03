@@ -853,6 +853,9 @@ def cue_time_stretch(mix, cue) -> None:
     t_last = getattr(edl, "T_LAST_MOTIF", s15 + 4.8)
     # the slowed world recedes as the fall takes over (output-time gain on the warped stems, dB)
     mix.warp_gain = [(t0, -2.0), (s15, -5.0), (s15 + 3.0, -14.0), (t1, -16.0)]
+    # the last motif IS the twist (the ship's tick has become the signal): everything but the beacon
+    # steps 9 dB down under it, to the hard cut (review round 2: the music buried it at -13 LUFS)
+    mix.dip(t_last - 0.12, t1 + 0.5, -9.0, ("music", "drones", "fx", "interference", "signal"))
     # entry whump
     m = n_of(1.2)
     tm = tt(m)

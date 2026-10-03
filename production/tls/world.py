@@ -39,7 +39,7 @@ SKY_ROT = sky_rotation()
 
 # default physical/look parameters of the black hole (overridable per shot)
 DISK = {
-    "T_peak": 6500, "p_T": 4.0, "p_g": 2.0, "color_g": 1.0, "emit_gain": 3.0,
+    "T_peak": 6500, "p_T": 4.0, "p_g": 2.0, "color_g": 0.75, "emit_gain": 3.0,   # colour shift x0.75 (physics P3)
     "r_out": 22.0, "taper": 0.35, "h_over_r": 0.012, "kappa": 4.0,
     "haze": 0.002, "haze_h": 0.1, "flow_period": 0.35,
     "clumps": 1.3, "lanes": 1.0, "arms": 0.45,

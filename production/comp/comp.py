@@ -169,6 +169,12 @@ def interference_fx(enc: np.ndarray, amt: float, seed: int, t: float) -> np.ndar
         h = max(1, int(rng.uniform(1, 2 + 5 * amt) * s))
         sh = int(round(rng.normal(0, (2 + 14 * amt) * s)))
         out[y0:y0 + h] = np.roll(enc[y0:y0 + h], sh, axis=1)
+    if amt > 0.6:   # a few wide tears that survive a phone screen (review round 2)
+        for _ in range(int(1 + (amt - 0.6) * 6)):
+            y0 = int(rng.uniform(0.05, 0.95) * H)
+            h = max(2, int(rng.uniform(10, 20) * s))
+            sh = int(round(rng.choice([-1, 1]) * rng.uniform(10, 24) * s))
+            out[y0:y0 + h] = np.roll(enc[y0:y0 + h], sh, axis=1)
     yy = np.arange(H, dtype=np.float32)[:, None, None] / H
     band = np.exp(-((yy - ((t * 0.37) % 1.3 - 0.15)) / 0.06) ** 2)
     fine = rng.standard_normal((H, W, 1)).astype(np.float32)

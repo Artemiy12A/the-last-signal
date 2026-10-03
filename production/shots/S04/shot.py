@@ -34,4 +34,4 @@ def params(t, q):
                    white=(0.98, 0.98, 1.0), interference=0.2 * edl.interference(t))
     bl = {"controls": controls(t, engine=0.12), "world": {"color": [0.0004, 0.0005, 0.0007]},
           "keys": [{"dir": [0.1, 1.0, 0.25], "color": [1.0, 0.8, 0.6], "strength": 0.25, "angle": 2.0}]}
-    return {"comp": P, "tracer": {}, "blender": bl}
+    return {"comp": P, "tracer": {"disk": {"on": False}}, "blender": bl}

@@ -18,7 +18,7 @@ aim = Track([(T0, v3(-3.7, 0.0, 1.7)), (T1, v3(-3.1, 0.0, 2.7))])   # mostly sha
 def cam_at(t: float) -> Cam:
     p = orbit_pos(150.0, 84.0, -90.0)
     f = look(p, aim(t))
-    c = Cam(fwd=f, up=v3(0, 0, 1), pos_bh=p, hfov=4.2)
+    c = Cam(fwd=f, up=v3(0, 0, 1), pos_bh=p, hfov=1.8)   # a 2.3x longer lens: the arc only
     return c.with_drift(t, 0.004, seed=7)
 
 

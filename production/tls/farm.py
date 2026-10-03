@@ -22,9 +22,11 @@ from .paths import OUT, PROD, ROOT  # noqa: E402
 
 # rough relative cost per frame (final quality, 4 vCPU seconds) used for load balancing
 COST = {
-    "BLK0": 1, "BLK1": 1, "TITLE": 3, "BTN": 1,
-    "S01": 60, "S02": 200, "S03": 220, "S04": 160, "S05": 200, "S06": 200, "S07": 260, "S08": 320,
-    "S09": 200, "S10": 420, "S11": 360, "S12": 480, "S13": 300, "S14": 200, "S15": 300,
+    # fitted to the preview-2 farm run's shard times (2026-10-03), x4 to final units; Blender-heavy shots carry
+    # an extra x1.5 because final samples (192 vs 48) cost more than the tracer's spp step
+    "BLK0": 1, "BLK1": 1, "TITLE": 3, "BTN": 2,
+    "S01": 90, "S02": 260, "S03": 280, "S04": 40, "S05": 110, "S06": 275, "S07": 215, "S08": 300,
+    "S09": 420, "S10": 175, "S11": 470, "S12": 150, "S13": 210, "S14": 490, "S15": 155,
 }
 QSCALE = {"draft": 1 / 16, "preview": 1 / 4, "final": 1.0}
 

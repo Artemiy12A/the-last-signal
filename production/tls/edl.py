@@ -41,7 +41,8 @@ class Shot:
 
 
 SHOTS: list[Shot] = [
-    # review round 1 (2026-09-29): reveal at 46 s, S11 a 2.5 s speck, the time goes to the ending
+    # review round 1 (2026-09-29): reveal at 46 s, the time goes to the ending; round 2 (2026-10-03): S11 3.5 s
+    # (1 s from S10's hold), S14/S15 cut on the onset of the long flash (73.99) so it carries across the match cut
     Shot("BLK0", 0.0, 3.0, "black open", "black"),
     Shot("S01", 3.0, 8.0, "The Deep", "shot", ("tracer", "blender")),
     Shot("S02", 8.0, 13.5, "Hull", "shot", ("tracer", "blender")),
@@ -52,12 +53,12 @@ SHOTS: list[Shot] = [
     Shot("S07", 35.5, 38.5, "Glimpse: edge", "shot", ("tracer",)),
     Shot("S08", 38.5, 43.5, "Debris", "shot", ("tracer", "blender")),
     Shot("S09", 43.5, 46.0, "Breath", "shot", ("tracer", "blender")),
-    Shot("S10", 46.0, 57.5, "The reveal", "shot", ("tracer", "blender")),
-    Shot("S11", 57.5, 60.0, "Scale", "shot", ("tracer", "blender")),
+    Shot("S10", 46.0, 56.5, "The reveal", "shot", ("tracer", "blender")),
+    Shot("S11", 56.5, 60.0, "Scale", "shot", ("tracer", "blender")),
     Shot("S12", 60.0, 65.0, "Under the arch", "shot", ("tracer", "blender")),
     Shot("S13", 65.0, 69.0, "Interference", "shot", ("tracer",)),
-    Shot("S14", 69.0, 73.5, "Last look", "shot", ("tracer", "blender")),
-    Shot("S15", 73.5, 82.5, "The fall", "shot", ("tracer",)),
+    Shot("S14", 69.0, 74.0, "Last look", "shot", ("tracer", "blender")),
+    Shot("S15", 74.0, 82.5, "The fall", "shot", ("tracer",)),
     Shot("BLK1", 82.5, 84.5, "silence", "black"),
     Shot("TITLE", 84.5, 88.6, "THE LAST SIGNAL", "title"),
     Shot("BTN", 88.6, 90.0, "button", "black"),

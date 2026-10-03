@@ -12,10 +12,10 @@ from tls.shotkit import cam_pos_for_screen, controls, probe, ship_matrix, ship_p
 
 SHOT = edl.SHOT_BY_ID["S14"]
 T0, T1 = SHOT.start, SHOT.end
-BEACON = v3(0.0, 15.73, 2.95)
-HFOV = 30.0
-dist = Track([(T0, 2.6), (T1, 2.05)], ease=0.3)                # slow push onto the lamp
-fwd = Track([(T0, v3(-0.12, 1.0, -0.07)), (T1, v3(-0.09, 1.0, -0.05))], ease=0.3)   # the lamp against the shadow
+BEACON = v3(0.0, 15.73, 2.751)        # flush xenon dome (ship_build: review round 2)
+HFOV = 40.0
+dist = Track([(T0, 4.2), (T1, 3.4)], ease=0.3)                 # slow push onto the lamp
+fwd = Track([(T0, v3(-0.34, 1.0, -0.075)), (T1, v3(-0.3, 1.0, -0.06))], ease=0.3)   # just above the hull top, the lamp against the shadow
 
 
 def cam_at(t):
@@ -23,7 +23,7 @@ def cam_at(t):
     d = float(dist(t))
     b = (ship_at(t) @ [*BEACON, 1.0])[:3]                     # the lamp where the posed ship carries it
     p = cam_pos_for_screen(f, (0, 0, 1), 0.60, 0.37, d, HFOV, target=b)   # where S15's point of light starts: a match cut
-    c = Cam(fwd=f, up=v3(0, 0, 1), pos_bh=ship_pos_bh(10.0), pos_ship=p, hfov=HFOV, focus=d, fstop=1.4)
+    c = Cam(fwd=f, up=v3(0, 0, 1), pos_bh=ship_pos_bh(10.0), pos_ship=p, hfov=HFOV, focus=d, fstop=2.0)
     return c.with_drift(t, 0.05, seed=14, vib_px=0.3)
 
 
