@@ -179,11 +179,19 @@ def assemble(q: str, segdir: Path, out: Path, audio: Path | None, title: str):
     mp4 = out / f"{base}.mp4"
     a_in = ["-i", audio] if audio and audio.exists() else []
     a_map = ["-map", "0:v", "-map", "1:a"] if a_in else []
-    ffmpeg("-i", joined, *a_in, *a_map, "-c:v", "prores_ks", "-profile:v", "3", "-pix_fmt", "yuv422p10le",
-           "-vendor", "apl0", *(["-c:a", "pcm_s24le"] if a_in else []), "-t", edl.DURATION,
-           "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", master)
+    def prores(profile, path):
+        ffmpeg("-i", joined, *a_in, *a_map, "-c:v", "prores_ks", "-profile:v", profile, "-pix_fmt", "yuv422p10le",
+               "-vendor", "apl0", *(["-c:a", "pcm_s24le"] if a_in else []), "-t", edl.DURATION,
+               "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", path)
+    prores("3", master)
+    if master.stat().st_size > 1.9e9:   # GitHub release assets stop at 2 GB: fall back to ProRes 422
+        master.unlink()
+        master = out / f"{base}_master_ProRes422.mov"
+        prores("2", master)
+    # phone-friendly ceiling: CRF 14 with grain can balloon past what a phone streams comfortably
+    cap = ["-maxrate", "40M", "-bufsize", "80M"] if q == "final" else []
     ffmpeg("-i", joined, *a_in, *a_map, "-c:v", "libx264", "-preset", "slow", "-crf", "14" if q == "final" else "18",
-           "-tune", "grain", "-profile:v", "high", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+           *cap, "-tune", "grain", "-profile:v", "high", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
            "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
            *(["-c:a", "aac", "-b:a", "320k"] if a_in else []), "-t", edl.DURATION, mp4)
     joined.unlink()
