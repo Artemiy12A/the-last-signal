@@ -837,6 +837,7 @@ What the renderer actually does, and where it departs:
 | P18 | sound: per-flash time stretch capped at ×10 | ×25 by the end of S15 | the root would fall to 26 Hz |
 | P19 | sound: measured flash fade (≈ g⁴) compressed (gain^0.3 in detection, applied as ^0.5) | g⁴ | the last flashes must stay audible |
 | P20 | S15 seen from 65 M, 18° above the disk plane; camera clock starts at 72 M so the fall lands inside the shot | — | a different vantage from the reveal (S10, 4°) for the climax |
+| P21 | the ship's clock is steered (`edl.ship_rate`): eased from x1 at S14 to exactly x4.5 at 77.9 s and held there, so the fall ends on one complete motif at the signal's tempo; S15's flash timing follows this clock while the beacon's position, lensing, colour (T·g) and dimming come from the traced worldline; the beacon is a 6000 K xenon point with dimming g^2 | the observed rate falls continuously toward zero (g ≈ 0.8 → 0.15 over the shot) and the flux as g^4 | the audience must hear the ship's tick become the signal, and see the point until the cut |
 
 ## 13. References
 

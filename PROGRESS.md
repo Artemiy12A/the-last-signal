@@ -2,8 +2,8 @@
 
 ## Current phase
 
-**Phase 2 → 3: all 19 shots exist and render; first full-quality-ish preview cut (960 px, every
-frame, with the soundtrack) goes to the farm as `tls90-preview-1`. Next: reviewer passes.**
+**Phase 3: review round 1 done; preview cut 2 (960 px, every frame, new soundtrack) on the farm as
+`tls90-preview-2`. preview-1 was cancelled mid-render: it showed the pre-review film.**
 
 Previews published so far:
 - `tls90-previs-1` (draft, every 2nd frame, no final ship/sound): https://github.com/Artemiy12A/the-last-signal/releases/tag/tls90-previs-1
@@ -30,6 +30,18 @@ Previews published so far:
   - S14 rebuilt as "last look", a beacon macro against the shadow.
   - S15 moved to a high vantage (18° above the disk) so it no longer repeats S10.
   - Time dilation made continuous S14→S15 (physics P15).
+
+- Review round 1 (independent picture + sequence reviewers, 2026-09-29), acted on:
+  - EDL retimed: reveal at 46 s, S11 a 2.5 s speck, S12 5 s, S13 4 s, S14 4.5 s, S15 9 s.
+  - The twist made readable: steered ship clock (physics P21), the fall ends on one complete motif at
+    the signal's x4.5; the title restates it; the long pulse lands in the black with a red point.
+  - S15 beacon = a 6000 K point that reddens and dims inside the dimmed disk; S14→S15 match cut.
+  - Reveal protected (S04/S05 lensed stars only, S07 an edge glimpse).
+  - House grade desaturated (0.94 → ~0.65 median saturation of bright pixels) with white-hot highlights.
+  - Streaks soft-kneed and shortened; frame-edge smear fixed; ship relit (hard keys, rims).
+  - S11 true speck; S12 black shadow; S13 blue shift; title heavier + ring echo + grain.
+  - Sound: S15 onsets from the EDL, reveal hit + riser from the motif (no braam/Shepard), Act I
+    +8 dB, LRA 12.4 LU.
 
 ## Next
 

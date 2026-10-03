@@ -59,7 +59,7 @@ def ride_db(t: float) -> float:
     return float(np.interp(t, [a for a, _ in ACT_RIDE], [b for _, b in ACT_RIDE]))
 
 
-LAST_MOTIF_DB = 7.0        # the fall's last motif (the ship as the signal) sits above the signal's level
+LAST_MOTIF_DB = 8.5        # the fall's last motif (the ship as the signal) sits above the signal's level
 WARP_BETA = 0.45           # sound time-dilation = (dtau/dt)^beta (cinema: physical beta = 1)
 SOUND_MAX_STRETCH = 10.0   # cap for the sound of a flash (x25 would put the root at 26 Hz)
 
@@ -669,7 +669,7 @@ def cue_braam(mix, cue) -> None:
     t0 = cue.t + 0.8
     t_end = S("S12", cue.t + 14.0)
     m = n_of(t_end - t0 + 1.0)
-    lv = dsp.curve(m, [(t0, -60), (t0 + 3.0, -31), (t_end - 3.0, -30), (t_end, -28), (t_end + 1.0, -60)], t0, "db")
+    lv = dsp.curve(m, [(t0, -60), (t0 + 3.0, -27), (t_end - 3.0, -26), (t_end, -25), (t_end + 1.0, -60)], t0, "db")
     ch = np.stack([motif_cluster(D2 * (1 + (-1) ** c * 0.0006), m, dsp.curve(m, [(0, 0.3), (6.0, 1.0), (m / SR, 1.0)]),
                                  dsp.curve(m, [(0, 3.0), (m / SR, 9.0)]), f"awe{c}") for c in range(2)], 1)
     ch += 0.5 * np.stack([motif_cluster(D3, m, 0.45, 5.0, f"aweh{c}") for c in range(2)], 1)
@@ -745,7 +745,7 @@ def cue_shepard_riser(mix, cue) -> None:
     u2 = np.clip((t - (T_SLOW - t0)) / max(t1 - T_SLOW, 0.1), 0, 1)
     root = D2 * 2.0 ** (2.0 * u ** 1.7 + 0.5 * u2)
     y = motif_cluster(root, n, 0.15 + 0.85 * u, 3.0 + 16.0 * u, "rise")
-    lvl = dsp.curve(n, [(t0, -60), (t0 + 1.0, -40), (S("S13", 65.0), -30), (T_SLOW, -22), (max(t1, T_SLOW + 0.1), -21)],
+    lvl = dsp.curve(n, [(t0, -60), (t0 + 0.6, -34), (S("S13", 65.0), -28), (T_SLOW, -22), (max(t1, T_SLOW + 0.1), -21)],
                      t0, "db") * dsp.fade(n, 0, n_of(0.5))
     mix.add("music", dsp.widen(y * lvl * 0.9, 0.7, "rise"), t0, sends={"void": 0.3})
     nz = dsp.tv_filter(dsp.colored(n, dsp.rng("riser"), -3.0), 300.0 * 11 ** u, 2.0, "bp", 64)
