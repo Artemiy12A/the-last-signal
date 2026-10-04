@@ -26,11 +26,10 @@ from .paths import OUT, PROD, ROOT  # noqa: E402
 
 # rough relative cost per frame (final quality, 4 vCPU seconds) used for load balancing
 COST = {
-    # fitted to the final run's shard times (tls90-final, run 37163704098; seconds/frame / 1.5) where it has
-    # data; S12-S15 and the title cards still carry the preview-2 fit (x4 to final units)
+    # fitted to the final run's shard times (tls90-final, run 37163704098; seconds/frame / 1.5)
     "BLK0": 4, "BLK1": 1, "TITLE": 3, "BTN": 2,
     "S01": 5, "S02": 420, "S03": 135, "S04": 80, "S05": 45, "S06": 145, "S07": 245, "S08": 115,
-    "S09": 225, "S10": 190, "S11": 335, "S12": 150, "S13": 210, "S14": 490, "S15": 155,
+    "S09": 225, "S10": 190, "S11": 335, "S12": 240, "S13": 250, "S14": 430, "S15": 160,
 }
 QSCALE = {"draft": 1 / 16, "preview": 1 / 4, "final": 1.0}
 
