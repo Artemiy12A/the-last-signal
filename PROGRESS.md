@@ -57,12 +57,11 @@ Previews published so far:
 
 ## Next
 
-1. preview-2 checked: sheet and cut strips clean, S14→S15 match cut within ~8% of frame width
-   (tune), refresh the bible's stills from its release stills.
-2. Review round 2 on the preview-2 frames (most passes on S10 reveal, S11 scale, S15 fall, TITLE).
-3. Final render: `render-request.json` quality final, jobs 40 (20 run at once; ~3 h per shard by the
-   measured S10 frame, inside the 350 min limit), then the final release + README link at the top.
-4. Canva 2:3 poster + 9:16 cover from real final stills; bible updated.
+1. Final render `tls90-final` (run 37163704098, started 2026-10-04 00:03 UTC, 60 shards, 20 at once).
+   Shard 0 (BLK0 + S01) finished in 7 min; the rest are running.
+2. When it lands: contact sheet, cut strips, S15 beacon check, loudness; release link at the top of
+   README.md; bible stills refreshed from the final release stills.
+3. Canva 2:3 poster + 9:16 cover from real final stills (no AI imagery), linked from the bible.
 
 ## Known problems
 
