@@ -228,6 +228,8 @@ jobs:
           gh release download "$TAG" -p 'THE_LAST_SIGNAL*.mp4' -D dl
           python production/tools/make_posters.py --video "$(ls dl/*.mp4 | head -1)" --out posters
           gh release upload "$TAG" posters/* --clobber
+          # hand-written notes for a release, when the repo carries them
+          if [ -f "production/release_notes/$TAG.md" ]; then gh release edit "$TAG" --notes-file "production/release_notes/$TAG.md"; fi
 
   assemble:
     needs: [plan, render]
@@ -294,6 +296,7 @@ jobs:
               echo "Patched in run ${GITHUB_RUN_ID}: frames the earlier run(s) ${REUSE} lost (runner loss, shard deadline) re-rendered here; the rest are those runs' segments."
             fi
           } > notes.md
+          [ -f "production/release_notes/$TAG.md" ] && cp "production/release_notes/$TAG.md" notes.md
           FLAGS=""
           [ "$PUB" = "prerelease" ] && FLAGS="--prerelease"
           FILES="dist/*.mp4 dist/contact_sheet.jpg dist/stills/*.jpg dist/posters/*"
