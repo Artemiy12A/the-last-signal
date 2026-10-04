@@ -263,7 +263,7 @@ jobs:
             echo "Frames missing (filled with black): ${MISSING}"
             if [ -n "$REUSE" ]; then
               echo
-              echo "Patched in run ${GITHUB_RUN_ID}: frames the earlier run(s) ${REUSE} lost (runner loss) re-rendered here; the rest are those runs' segments."
+              echo "Patched in run ${GITHUB_RUN_ID}: frames the earlier run(s) ${REUSE} lost (runner loss, shard deadline) re-rendered here; the rest are those runs' segments."
             fi
           } > notes.md
           FLAGS=""

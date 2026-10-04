@@ -77,7 +77,8 @@ def plan(frames: list[int], q: str, jobs: int, every: int = 1) -> list[dict]:
 
 
 def _gh(path: str, jq: str | None = None) -> str:
-    cmd = ["gh", "api", path] + (["--paginate", "--jq", jq] if jq else [])
+    # job logs carry Blender's colour codes, which gh refuses to print without --allow-escape-sequences
+    cmd = ["gh", "api", path] + (["--paginate", "--jq", jq] if jq else ["--allow-escape-sequences"])
     return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
 
 
@@ -96,9 +97,8 @@ def delivered_by_run(run: int, repo: str, log=None) -> set[int]:
         fs = parse_frames(m.group(2))
         try:
             text = log(jid)
-        except subprocess.CalledProcessError as e:   # unreadable log: count the shard as whole (assemble still
-            print(f"warning: no log for job {jid}: {e.stderr}", file=sys.stderr)   # reports any gap)
-            text = ""
+        except subprocess.CalledProcessError as e:   # never guess: an unread deadline line is a silent black gap
+            raise SystemExit(f"cannot read the log of job {jid} ({name}): {e.stderr}")
         d = re.search(r"deadline reached before frame (\d+)", text)
         out.update(f for f in fs if not d or f < int(d.group(1)))
     return out
