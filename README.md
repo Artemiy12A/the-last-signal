@@ -1,10 +1,11 @@
 # THE LAST SIGNAL
 
-> **The 90-second remake is in production** (`production/`, see `PROGRESS.md`).
-> Production bible — logline, shot plan, sound, status, preview links:
-> https://claude.ai/code/artifact/4cf29026-e94a-453a-8bfb-2f83f1113f6d
-> Latest preview: [tls90-preview-2](https://github.com/Artemiy12A/the-last-signal/releases/tag/tls90-preview-2)
-> (full 90 s, 960 px, with sound). The original 20-second film below stays untouched.
+> **THE LAST SIGNAL, 90 seconds — the final film:**
+> **https://github.com/Artemiy12A/the-last-signal/releases/tag/tls90-final**
+> On iPhone: tap `THE_LAST_SIGNAL.mp4` → it plays in the browser → Share → Save Video. The release also holds
+> the ProRes 422 HQ master, one still per shot, a 2:3 poster and a 9:16 cover.
+> Production bible (logline, shot plan, sound, status): https://claude.ai/code/artifact/4cf29026-e94a-453a-8bfb-2f83f1113f6d
+> How it was made: `production/` and `PROGRESS.md`. The original 20-second film below stays untouched.
 
 A 20-second cinematic sci-fi teaser. A tiny deep-space probe answers a faint
 signal and drifts toward a supermassive black hole, and the black hole is the
