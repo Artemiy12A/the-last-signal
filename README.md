@@ -4,6 +4,7 @@
 > **https://github.com/Artemiy12A/the-last-signal/releases/tag/tls90-final**
 > On iPhone: tap `THE_LAST_SIGNAL.mp4` → it plays in the browser → Share → Save Video. The release also holds
 > the ProRes 422 HQ master, one still per shot, a 2:3 poster and a 9:16 cover.
+> Premiere page: https://the-last-signal-film.lovable.app
 > Production bible (logline, shot plan, sound, status): https://claude.ai/code/artifact/4cf29026-e94a-453a-8bfb-2f83f1113f6d
 > How it was made: `production/` and `PROGRESS.md`. The original 20-second film below stays untouched.
 

@@ -67,10 +67,14 @@ Earlier cuts:
 - Posters: `production/tools/make_posters.py` (reveal frame 52.0 s at 1:1, comp.titles Jost) on the farm;
   PDFs in `docs/posters/`; imported into Canva (poster DAHXDAnLSAw, cover DAHXDLNSi9Q).
 
+- Premiere page (Lovable, free plan, 2 generations): https://the-last-signal-film.lovable.app — the reveal
+  still, title with the motif blinking as a red point, logline, watch link. Its images load from this branch's
+  `docs/posters/` (raw.githubusercontent.com), so the branch must stay.
+
 ## Next
 
 Nothing required. Optional: a listening pass on real speakers/headphones (the mix was balanced from meters
-and plots); a premiere page (Lovable) if wanted.
+and plots).
 
 ## Known problems
 
