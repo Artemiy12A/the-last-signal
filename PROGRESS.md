@@ -58,10 +58,15 @@ Previews published so far:
 ## Next
 
 1. Final render `tls90-final` (run 37163704098, started 2026-10-04 00:03 UTC, 60 shards, 20 at once).
-   Shard 0 (BLK0 + S01) finished in 7 min; the rest are running.
-2. When it lands: contact sheet, cut strips, S15 beacon check, loudness; release link at the top of
+   First-wave shards took 50–180 min; the S02/S03 shards (203–336) are the slowest. Shard 16 (S06
+   774–798) died with its runner at 84 min (no log, "lost communication"): those frames will be black
+   in this run's assembly.
+2. Patch run 37173195147 is queued behind it (concurrency group): `frames: missing`, reusing run
+   37163704098's segments. It re-renders whatever that run lost (shard 16, any deadline tails), assembles
+   and replaces the assets of the same `tls90-final` release.
+3. When the patch lands: contact sheet, cut strips, S15 beacon check, loudness; release link at the top of
    README.md; bible stills refreshed from the final release stills.
-3. Canva 2:3 poster + 9:16 cover from real final stills (no AI imagery), linked from the bible.
+4. Canva 2:3 poster + 9:16 cover from real final stills (no AI imagery), linked from the bible.
 
 ## Known problems
 
@@ -103,4 +108,5 @@ python production/audio/analyze.py                # spectrogram, loudness, sub-b
 cd production && python -m tls.review camera      # camera motion curves
 cd production && python -m tls.farm plan --quality preview --jobs 20
 # farm: edit production/render-request.json (quality/frames/every/tag), commit, push
+# patch: "frames": "missing", "reuse_runs": [<run id>] -> renders only what that run lost, same tag
 ```
