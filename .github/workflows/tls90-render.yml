@@ -38,6 +38,7 @@ on:
 
 permissions:
   contents: write
+  actions: read       # patch runs read earlier runs' jobs, logs and segments
 
 concurrency:
   group: tls90-${{ github.ref }}
@@ -57,6 +58,7 @@ jobs:
       publish: ${{ steps.p.outputs.publish }}
       tag: ${{ steps.p.outputs.tag }}
       needs_blender: ${{ steps.p.outputs.needs_blender }}
+      reuse_runs: ${{ steps.p.outputs.reuse_runs }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -72,6 +74,7 @@ jobs:
           IN_JOBS: ${{ inputs.jobs }}
           IN_PUB: ${{ inputs.publish }}
           IN_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           python - <<'EOF'
           import json, os, sys, time
@@ -83,19 +86,26 @@ jobs:
           else:
               req = json.load(open("production/render-request.json"))
           q = req.get("quality", "preview")
-          frames = farm.parse_frames(req.get("frames", "all"))
+          reuse = [int(r) for r in req.get("reuse_runs", [])]
+          if req.get("frames") == "missing":       # patch run: only what the reused runs did not deliver
+              frames = farm.missing_after(reuse, os.environ["GITHUB_REPOSITORY"])
+          else:
+              frames = farm.parse_frames(req.get("frames", "all"))
           every = int(req.get("every", 1))
           shards = farm.plan(frames, q, int(req.get("jobs", 20)), every)
           tag = req.get("tag") or f"tls90-{q}-{time.strftime('%Y%m%d-%H%M')}"
           ids = {edl.shot_at(edl.frame_time(f) + 1e-6).id for f in frames}
           needs_bl = any(("blender" in edl.SHOT_BY_ID[i].layers) for i in ids)
           out = {"matrix": json.dumps(shards), "quality": q, "every": str(every),
-                 "publish": req.get("publish", "none"), "tag": tag, "needs_blender": str(needs_bl).lower()}
+                 "publish": req.get("publish", "none"), "tag": tag, "needs_blender": str(needs_bl).lower(),
+                 "reuse_runs": " ".join(map(str, reuse))}
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               for k, v in out.items():
                   f.write(f"{k}={v}\n")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
               f.write(f"### Render plan: {q}, {len(frames)} frames (every {every}), {len(shards)} jobs, publish={out['publish']}, tag={tag}\n\n")
+              if reuse:
+                  f.write(f"Patch run: reusing the segments of runs {out['reuse_runs']}; rendering {', '.join(farm._compress(frames)) or 'nothing'}\n\n")
               for s in shards:
                   f.write(f"- job {s['id']}: frames {s['frames']} (~{s['est_min']} min)\n")
           EOF
@@ -130,6 +140,7 @@ jobs:
 
   render:
     needs: [plan, build]
+    if: needs.plan.outputs.matrix != '[]'
     runs-on: ubuntu-24.04
     timeout-minutes: 350
     strategy:
@@ -210,6 +221,14 @@ jobs:
           pattern: seg-*
           path: segs
           merge-multiple: true
+      - name: Reuse segments from earlier runs
+        if: needs.plan.outputs.reuse_runs != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNS: ${{ needs.plan.outputs.reuse_runs }}
+        run: |
+          for r in $RUNS; do gh run download "$r" -R "$GITHUB_REPOSITORY" -p 'seg-*' -D "segs/reuse/$r"; done
+          echo "segments: $(find segs -name 'seg_*.mov' | wc -l)"; df -h . | tail -1
       - name: Soundtrack
         continue-on-error: true
         run: |
@@ -233,6 +252,7 @@ jobs:
           TAG: ${{ needs.plan.outputs.tag }}
           Q: ${{ needs.plan.outputs.quality }}
           PUB: ${{ needs.plan.outputs.publish }}
+          REUSE: ${{ needs.plan.outputs.reuse_runs }}
         run: |
           MISSING=$(python -c "import json;print(len(json.load(open('dist/missing_frames.json'))))")
           {
@@ -241,9 +261,20 @@ jobs:
             echo "On iPhone: tap the **.mp4** below → it plays in the browser → Share → Save Video."
             echo
             echo "Frames missing (filled with black): ${MISSING}"
+            if [ -n "$REUSE" ]; then
+              echo
+              echo "Patched in run ${GITHUB_RUN_ID}: frames the earlier run(s) ${REUSE} lost (runner loss) re-rendered here; the rest are those runs' segments."
+            fi
           } > notes.md
           FLAGS=""
           [ "$PUB" = "prerelease" ] && FLAGS="--prerelease"
           FILES="dist/*.mp4 dist/contact_sheet.jpg dist/stills/*.jpg"
           [ "$Q" = "final" ] && FILES="$FILES dist/*_master_*.mov"
-          gh release create "$TAG" $FILES --target "$GITHUB_SHA" --title "THE LAST SIGNAL — ${Q} (${TAG})" --notes-file notes.md $FLAGS
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            # a patch run replaces the assets of the release its first run published (same URL)
+            gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r a; do gh release delete-asset "$TAG" "$a" -y; done
+            gh release upload "$TAG" $FILES
+            gh release edit "$TAG" --notes-file notes.md
+          else
+            gh release create "$TAG" $FILES --target "$GITHUB_SHA" --title "THE LAST SIGNAL — ${Q} (${TAG})" --notes-file notes.md $FLAGS
+          fi

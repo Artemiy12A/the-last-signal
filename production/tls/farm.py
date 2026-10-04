@@ -3,12 +3,16 @@
   python -m tls.farm plan --request production/render-request.json      -> writes matrix JSON to stdout
   python -m tls.farm shard --quality final --frames 1164-1260 --out seg  -> frames + ProRes segment
   python -m tls.farm assemble --quality final --segments segs --out dist
+
+A patch run (render-request "frames": "missing", "reuse_runs": [run ids]) renders only the frames earlier
+runs did not deliver and assembles them with those runs' segments (downloaded under segs/reuse/).
 """
 from __future__ import annotations
 
 import argparse
 import json
 import math
+import re
 import shutil
 import subprocess
 import sys
@@ -71,6 +75,41 @@ def plan(frames: list[int], q: str, jobs: int, every: int = 1) -> list[dict]:
         shards.append(cur)
     return [{"id": i, "frames": ",".join(_compress(s)), "n": len(s),
              "est_min": round(sum(frame_cost(f, q) for f in s) / 60, 1)} for i, s in enumerate(shards)]
+
+
+def _gh(path: str, jq: str | None = None) -> str:
+    cmd = ["gh", "api", path] + (["--paginate", "--jq", jq] if jq else [])
+    return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
+
+
+def delivered_by_run(run: int, repo: str, log=None) -> set[int]:
+    """Frames one farm run delivered: every successful render job's frames, cut at its deadline line if the
+    shard stopped early. A job that failed (runner lost, timeout, crash) delivered nothing: its segments are
+    only encoded after the last frame."""
+    log = log or (lambda jid: _gh(f"repos/{repo}/actions/jobs/{jid}/logs"))
+    rows = _gh(f"repos/{repo}/actions/runs/{run}/jobs?per_page=100",
+               '.jobs[] | [.id, .name, .conclusion] | @json').split("\n")
+    out = set()
+    for jid, name, concl in (json.loads(r) for r in rows if r.strip()):
+        m = re.match(r"render \((\d+), (.+), (\d+), [\d.]+\)$", name)
+        if not m or concl != "success":
+            continue
+        fs = parse_frames(m.group(2))
+        try:
+            text = log(jid)
+        except subprocess.CalledProcessError as e:   # unreadable log: count the shard as whole (assemble still
+            print(f"warning: no log for job {jid}: {e.stderr}", file=sys.stderr)   # reports any gap)
+            text = ""
+        d = re.search(r"deadline reached before frame (\d+)", text)
+        out.update(f for f in fs if not d or f < int(d.group(1)))
+    return out
+
+
+def missing_after(runs: list[int], repo: str, log=None) -> list[int]:
+    have = set()
+    for r in runs:
+        have |= delivered_by_run(r, repo, log)
+    return [f for f in range(edl.NFRAMES) if f not in have]
 
 
 def _compress(fs: list[int]) -> list[str]:
@@ -151,11 +190,17 @@ def shard(q: str, frames_spec: str, out: Path, deadline_min: float = 330.0, ever
 def assemble(q: str, segdir: Path, out: Path, audio: Path | None, title: str):
     out.mkdir(parents=True, exist_ok=True)
     segdir.mkdir(parents=True, exist_ok=True)
-    segs = sorted(segdir.rglob("seg_*.mov"))
-    have = set()
+    # this run's segments first, then reused ones (segs/reuse/<run>/) where they don't overlap
+    segs = sorted(segdir.rglob("seg_*.mov"),
+                  key=lambda p: ("reuse" in p.relative_to(segdir).parts, int(p.stem.split("_")[1])))
+    have, keep = set(), []
     for s in segs:
         a, b = map(int, s.stem.split("_")[1:3])
+        if have & set(range(a, b + 1)):
+            print(f"assemble: skipping {s} (overlaps a newer segment)", flush=True)
+            continue
         have.update(range(a, b + 1))
+        keep.append(s)
     missing = [f for f in range(edl.NFRAMES) if f not in have]
     print(f"assemble: {len(segs)} segments, {len(have)} frames, {len(missing)} missing", flush=True)
     # fill gaps with black so timing stays locked (reported in the release notes)
@@ -169,7 +214,7 @@ def assemble(q: str, segdir: Path, out: Path, audio: Path | None, title: str):
         ffmpeg("-f", "lavfi", "-i", f"color=c=black:s={W}x{H}:r={edl.FPS}", "-frames:v", b - a + 1,
                "-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuv444p10le", seg)
         fill.append(seg)
-    segs = sorted(list(segdir.rglob("seg_*.mov")), key=lambda p: int(p.stem.split("_")[1]))
+    segs = sorted(keep + fill, key=lambda p: int(p.stem.split("_")[1]))
     lst = out / "segments.txt"
     lst.write_text("".join(f"file '{s.resolve()}'\n" for s in segs))
     joined = out / "joined.mov"
@@ -224,7 +269,10 @@ def main():
     if a.cmd == "plan":
         req = json.loads(a.request.read_text()) if a.request else {}
         q = req.get("quality", a.quality)
-        shards = plan(parse_frames(req.get("frames", a.frames)), q, int(req.get("jobs", a.jobs)), int(req.get("every", 1)))
+        spec = req.get("frames", a.frames)
+        frames = (missing_after([int(r) for r in req.get("reuse_runs", [])], "Artemiy12A/the-last-signal")
+                  if spec == "missing" else parse_frames(spec))
+        shards = plan(frames, q, int(req.get("jobs", a.jobs)), int(req.get("every", 1)))
         print(json.dumps({"quality": q, "shards": shards}))
     elif a.cmd == "shard":
         shard(a.quality, a.frames, a.out, a.deadline, a.every)

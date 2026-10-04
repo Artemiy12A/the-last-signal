@@ -1,10 +1,13 @@
 {
-  "note": "Committing a change to this file starts the render farm (.github/workflows/tls90-render.yml).",
+  "note": "Committing a change to this file starts the render farm (.github/workflows/tls90-render.yml). frames 'missing' + reuse_runs = a patch run: renders only what those runs lost, reuses their segments.",
   "quality": "final",
-  "frames": "all",
+  "frames": "missing",
   "every": 1,
-  "jobs": 60,
+  "jobs": 8,
   "publish": "release",
   "tag": "tls90-final",
-  "attempt": 1
+  "attempt": 2,
+  "reuse_runs": [
+    37163704098
+  ]
 }
