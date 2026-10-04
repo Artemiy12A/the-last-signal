@@ -38,6 +38,7 @@ def params(t, q):
                    coc_px=c.coc_inf_px(), white=(1.0, 0.95, 0.9), bloom=0.03, glare=0.006, streak=0.0,  # the lens is 50 px wide here: a streak would be a bar
                   
                    streak_threshold=30.0, streak_len=140.0, halation=0.08, vignette=0.36, punch=0.4, look_sat=1.15, saturation=0.85)
-    bl = {"controls": controls(t, engine=0.0, flicker=False), "probe": probe(10.0, strength=1.0),
+    bl = {"controls": controls(t, engine=0.0, flicker=False), "probe": probe(10.0, strength=1.0), "samples_scale": 0.5,
           "keys": [{"dir": [-0.15, 1.0, 0.3], "color": [1.0, 0.8, 0.6], "strength": 1.2, "angle": 25.0}]}
-    return {"comp": P, "tracer": {}, "blender": bl}
+    # the plate behind is thrown ~18 px out of focus at 1920: a third of the tracer samples is invisible
+    return {"comp": P, "tracer": {"spp": 7, "spp_min": 3, "spp_haze": 1}, "blender": bl}

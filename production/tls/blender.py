@@ -75,6 +75,7 @@ def frame_job(spec, q: str, exrdir: Path) -> dict:
         "hide_ship": b.get("hide_ship", False),
         "times": [spec.t - 1.0 / edl.FPS, spec.t, spec.t + 1.0 / edl.FPS],
         "props": b.get("props", []),
+        "samples_scale": float(b.get("samples_scale", 1.0)),   # per-shot Blender sample budget
     }
     import hashlib
     key = hashlib.sha1((json.dumps(job, sort_keys=True) + SHIP_BLEND.name + q).encode()).hexdigest()[:10]
@@ -87,7 +88,8 @@ def run_batch(jobs: list[dict], q: str, W: int, H: int, workdir: Path):
         return
     workdir.mkdir(parents=True, exist_ok=True)
     SHIP_BLEND.parent.mkdir(parents=True, exist_ok=True)
-    job = {"width": W, "height": H, "samples": BL_SAMPLES[q], "ship_blend": str(SHIP_BLEND), "frames": jobs}
+    spp = max(8, int(round(BL_SAMPLES[q] * jobs[0].get("samples_scale", 1.0))))
+    job = {"width": W, "height": H, "samples": spp, "ship_blend": str(SHIP_BLEND), "frames": jobs}
     jp = workdir / f"bjob_{Path(jobs[0]['out']).stem}.json"
     jp.write_text(json.dumps(job))
     r = subprocess.run([str(BLENDER), "-b", "--factory-startup", "-noaudio", "-P", str(RENDER_SCRIPT), "--", str(jp)],

@@ -29,4 +29,5 @@ def params(t, q):
                    white=(1.0, 0.93, 0.84))
     bl = {"controls": controls(t, engine=0.0, flicker=False), "world": {"color": [0.0, 0.0, 0.0]},
           "keys": [{"dir": [0.0, 1.0, 0.15], "color": [1.0, 0.72, 0.45], "strength": 3.0, "angle": 6.0}]}
-    return {"comp": P, "tracer": {"disk": {"haze": 0.02, "haze_h": 0.25}}, "blender": bl}
+    return {"comp": P, "tracer": {"disk": {"haze": 0.02, "haze_h": 0.25}, "spp": 3, "spp_min": 2, "spp_haze": 1},   # 220 px bokeh
+            "blender": bl}
