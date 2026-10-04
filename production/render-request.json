@@ -1,15 +1,16 @@
 {
-  "note": "Committing a change to this file starts the render farm (.github/workflows/tls90-render.yml). frames 'missing' or a range + reuse_runs = a patch run: renders those frames, reuses the runs' other segments.",
+  "note": "Committing a change to this file starts the render farm (.github/workflows/tls90-render.yml). frames 'missing' or a range + reuse_runs = a patch run; posters_only = remake the posters from the published film.",
   "quality": "final",
   "frames": "1775-2159",
   "every": 1,
   "jobs": 20,
   "publish": "release",
   "tag": "tls90-final",
-  "attempt": 5,
+  "attempt": 6,
   "reuse_runs": [
     37163704098,
     37180446408,
     37194883265
-  ]
+  ],
+  "posters_only": true
 }

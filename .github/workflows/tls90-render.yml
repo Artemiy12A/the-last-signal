@@ -59,6 +59,7 @@ jobs:
       tag: ${{ steps.p.outputs.tag }}
       needs_blender: ${{ steps.p.outputs.needs_blender }}
       reuse_runs: ${{ steps.p.outputs.reuse_runs }}
+      posters_only: ${{ steps.p.outputs.posters_only }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -87,7 +88,10 @@ jobs:
               req = json.load(open("production/render-request.json"))
           q = req.get("quality", "preview")
           reuse = [int(r) for r in req.get("reuse_runs", [])]
-          if req.get("frames") == "missing":       # patch run: only what the reused runs did not deliver
+          posters_only = bool(req.get("posters_only"))   # remake the posters from the published film only
+          if posters_only:
+              frames = []
+          elif req.get("frames") == "missing":       # patch run: only what the reused runs did not deliver
               frames = farm.missing_after(reuse, os.environ["GITHUB_REPOSITORY"])
           else:
               frames = farm.parse_frames(req.get("frames", "all"))
@@ -98,7 +102,7 @@ jobs:
           needs_bl = any(("blender" in edl.SHOT_BY_ID[i].layers) for i in ids)
           out = {"matrix": json.dumps(shards), "quality": q, "every": str(every),
                  "publish": req.get("publish", "none"), "tag": tag, "needs_blender": str(needs_bl).lower(),
-                 "reuse_runs": " ".join(map(str, reuse))}
+                 "reuse_runs": " ".join(map(str, reuse)), "posters_only": str(posters_only).lower()}
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               for k, v in out.items():
                   f.write(f"{k}={v}\n")
@@ -203,9 +207,31 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
+  posters:
+    needs: plan
+    if: needs.plan.outputs.posters_only == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: production/requirements.txt
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
+      - run: pip install -r production/requirements.txt
+      - name: Posters from the published film
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          gh release download "$TAG" -p 'THE_LAST_SIGNAL*.mp4' -D dl
+          python production/tools/make_posters.py --video "$(ls dl/*.mp4 | head -1)" --out posters
+          gh release upload "$TAG" posters/* --clobber
+
   assemble:
     needs: [plan, render]
-    if: always() && needs.plan.result == 'success'
+    if: always() && needs.plan.result == 'success' && needs.plan.outputs.posters_only != 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -237,6 +263,8 @@ jobs:
         run: |
           cd production && python -m tls.farm assemble --quality ${{ needs.plan.outputs.quality }} \
             --segments ../segs --out ../dist --audio cache/audio/soundtrack.wav
+      - name: Posters (2:3, 9:16) from the film's reveal frame
+        run: python production/tools/make_posters.py --video "$(ls dist/*.mp4 | head -1)" --out dist/posters
       - uses: actions/upload-artifact@v4
         with:
           name: film-${{ needs.plan.outputs.quality }}
@@ -268,7 +296,7 @@ jobs:
           } > notes.md
           FLAGS=""
           [ "$PUB" = "prerelease" ] && FLAGS="--prerelease"
-          FILES="dist/*.mp4 dist/contact_sheet.jpg dist/stills/*.jpg"
+          FILES="dist/*.mp4 dist/contact_sheet.jpg dist/stills/*.jpg dist/posters/*"
           [ "$Q" = "final" ] && FILES="$FILES dist/*_master_*.mov"
           if gh release view "$TAG" > /dev/null 2>&1; then
             # a patch run replaces the assets of the release its first run published (same URL)
