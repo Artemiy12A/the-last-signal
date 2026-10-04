@@ -2,12 +2,13 @@
 
 ## Current phase
 
-**Phase 4: final render on the farm (`tls90-final`, 1920x804, 60 shards, ~8.5 h). Review round 2 done.**
+**Done: the final film is released.** https://github.com/Artemiy12A/the-last-signal/releases/tag/tls90-final
+— 90.000 s, 2,160 frames at 1920x804, 0 missing; H.264 MP4 (~30 Mb/s, AAC), ProRes 422 HQ master, stills,
+2:3 poster + 9:16 cover (PNG/PDF; also in Canva). −14.1 LUFS, LRA 13.2 LU, −0.1 dBTP after AAC.
 
-Previews published so far:
-- `tls90-preview-2` (preview 960 px, every frame, sound; after review round 1): https://github.com/Artemiy12A/the-last-signal/releases/tag/tls90-preview-2
-  — run 37151490629, 2 h 08 min on 20 runners, 90.000 s, H.264 + AAC, −14.1 LUFS.
-- `tls90-previs-1` (draft, every 2nd frame, no final ship/sound): https://github.com/Artemiy12A/the-last-signal/releases/tag/tls90-previs-1
+Earlier cuts:
+- `tls90-preview-2` (960 px, every frame, sound; after review round 1): https://github.com/Artemiy12A/the-last-signal/releases/tag/tls90-preview-2
+- `tls90-previs-1` (draft, every 2nd frame): https://github.com/Artemiy12A/the-last-signal/releases/tag/tls90-previs-1
 
 ## Done
 
@@ -20,7 +21,7 @@ Previews published so far:
 - Hero ship LSV-7 (`production/blender/ship/`, README + ASSETS_SHIP.md): procedural hull, MLI,
   lattice spine, HGA gimbal, lamps, light groups; cached .blend keyed by source hash.
 - Soundtrack (`production/audio/`, README + ASSETS_AUDIO.md): FM tritone motif (beacon tick ↔
-  slowed signal are one voice), braam reveal, Shepard fall, true digital silence 82.5–84.5,
+  slowed signal are one voice), reveal hit and riser built from the motif, true digital silence 82.5–84.5,
   −14 LUFS, rendered from the EDL and the S15 light curve.
 - 2026-09-29 shot pass:
   - S05 disk dimmed to an ember (reveal stays the payoff).
@@ -55,45 +56,49 @@ Previews published so far:
   - Title larger, the motif blinking as a red point under it; wide interference tears; S05 disk off.
   - Farm costs fitted to preview-2 shard times; per-shot budgets (S14, S08, S09); master <= 2 GB guard.
 
+- Final render (2026-10-04): run 37163704098 (60 shards, commit 586b51c) + patch runs 37180446408 (S06
+  774–798, runner lost), 37194883265 (S02 281–283, shard deadline; S02 is ~630 s/frame), 37196682047 (S15 +
+  neighbours 1775–2159 after the beacon fix). Farm patch mode (`frames: missing` / a range + `reuse_runs`),
+  COST refitted to the final's shard times, release notes from `production/release_notes/<tag>.md`.
+- Final check found S15's beacon flickering ×2–×200 and dropping single frames at 1920 px. Tracer fix:
+  space-time closest approach + erf line integral per chord + 64 spp near the beacon (physics.md §9).
+  `shots/S15/beacon_check.py` (disk on, final res, every frame): 204 frames, no dropouts; the only jumps are
+  the four flash onsets, within 2 % of the EDL envelope.
+- Posters: `production/tools/make_posters.py` (reveal frame 52.0 s at 1:1, comp.titles Jost) on the farm;
+  PDFs in `docs/posters/`; imported into Canva (poster DAHXDAnLSAw, cover DAHXDLNSi9Q).
+
 ## Next
 
-1. Final render `tls90-final` (run 37163704098, started 2026-10-04 00:03 UTC, 60 shards, 20 at once).
-   Real costs: S02 ~630 s/frame at final (Blender hull macro), 2.4x the estimate, so shard 4 stopped at its
-   deadline before frame 281 and shard 5 (284-310) runs into it too. Shard 16 (S06 774-798) died with its
-   runner at 84 min (infra: S06 peaks at 2.3 GB locally). COST refitted from this run's shard times.
-2. Patch run 37180446408 is queued behind it (concurrency group): `frames: missing`, reusing run
-   37163704098's segments, 16 jobs. It re-renders whatever that run lost (from the job list + deadline lines
-   in the logs), assembles and replaces the assets of the same `tls90-final` release. ETA ~10:30 UTC.
-3. When the patch lands: contact sheet, cut strips, S15 beacon check, loudness; release link at the top of
-   README.md; bible stills refreshed from the final release stills.
-4. Canva 2:3 poster + 9:16 cover from real final stills (no AI imagery), linked from the bible.
+Nothing required. Optional: a listening pass on real speakers/headphones (the mix was balanced from meters
+and plots); a premiere page (Lovable) if wanted.
 
 ## Known problems
 
-- Disk striation (above). S14 is a strong image but the lamp's scale is ambiguous.
-- Nobody has listened to the mix yet (built from plots and numbers).
+- Nobody has listened to the mix yet (built from plots and numbers). True peak −0.1 dBTP after AAC (−1.3 dBFS
+  in the WAV): legal, but a −1 dBTP limiter ceiling would be safer for re-encodes.
+- S14 is a strong image but the lamp's scale is ambiguous.
 
 ## Shot status
 
 | id | beat | status |
 |---|---|---|
-| BLK0 | black open | preview |
-| S01 | the deep | preview |
-| S02 | hull macro | preview |
-| S03 | listening | preview |
-| S04 | wrong stars | preview |
-| S05 | the pull | preview |
-| S06 | glimpse: light (eclipse) | preview |
-| S07 | glimpse: edge | preview |
-| S08 | debris | preview |
-| S09 | breath | preview |
-| S10 | the reveal | preview |
-| S11 | scale | preview |
-| S12 | under the arch | preview |
-| S13 | interference | preview |
-| S14 | last look | preview |
-| S15 | the fall | preview |
-| BLK1, TITLE, BTN | silence, title, button | preview |
+| BLK0 | black open | final |
+| S01 | the deep | final |
+| S02 | hull macro | final |
+| S03 | listening | final |
+| S04 | wrong stars | final |
+| S05 | the pull | final |
+| S06 | glimpse: light (eclipse) | final |
+| S07 | glimpse: edge | final |
+| S08 | debris | final |
+| S09 | breath | final |
+| S10 | the reveal | final |
+| S11 | scale | final |
+| S12 | under the arch | final |
+| S13 | interference | final |
+| S14 | last look | final |
+| S15 | the fall | final |
+| BLK1, TITLE, BTN | silence, title, button | final |
 
 ## Pipeline commands
 
@@ -108,5 +113,8 @@ python production/audio/analyze.py                # spectrogram, loudness, sub-b
 cd production && python -m tls.review camera      # camera motion curves
 cd production && python -m tls.farm plan --quality preview --jobs 20
 # farm: edit production/render-request.json (quality/frames/every/tag), commit, push
-# patch: "frames": "missing", "reuse_runs": [<run id>] -> renders only what that run lost, same tag
+# patch: "frames": "missing" (or a range), "reuse_runs": [<run ids>] -> renders only those, reuses the rest, same tag
+# posters: "posters_only": true -> posters (+ production/release_notes/<tag>.md) onto the published release
+cd production && python shots/S15/beacon_check.py   # S15 beacon acceptance: disk on, final res, every frame
+python production/tools/make_posters.py --video <film.mp4>   # 2:3 poster + 9:16 cover
 ```
