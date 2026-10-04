@@ -58,12 +58,12 @@ Previews published so far:
 ## Next
 
 1. Final render `tls90-final` (run 37163704098, started 2026-10-04 00:03 UTC, 60 shards, 20 at once).
-   First-wave shards took 50–180 min; the S02/S03 shards (203–336) are the slowest. Shard 16 (S06
-   774–798) died with its runner at 84 min (no log, "lost communication"): those frames will be black
-   in this run's assembly.
-2. Patch run 37173195147 is queued behind it (concurrency group): `frames: missing`, reusing run
-   37163704098's segments. It re-renders whatever that run lost (shard 16, any deadline tails), assembles
-   and replaces the assets of the same `tls90-final` release.
+   Real costs: S02 ~630 s/frame at final (Blender hull macro), 2.4x the estimate, so shard 4 stopped at its
+   deadline before frame 281 and shard 5 (284-310) runs into it too. Shard 16 (S06 774-798) died with its
+   runner at 84 min (infra: S06 peaks at 2.3 GB locally). COST refitted from this run's shard times.
+2. Patch run 37180446408 is queued behind it (concurrency group): `frames: missing`, reusing run
+   37163704098's segments, 16 jobs. It re-renders whatever that run lost (from the job list + deadline lines
+   in the logs), assembles and replaces the assets of the same `tls90-final` release. ETA ~10:30 UTC.
 3. When the patch lands: contact sheet, cut strips, S15 beacon check, loudness; release link at the top of
    README.md; bible stills refreshed from the final release stills.
 4. Canva 2:3 poster + 9:16 cover from real final stills (no AI imagery), linked from the bible.
