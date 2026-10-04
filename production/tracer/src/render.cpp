@@ -164,6 +164,7 @@ struct Beacon {
     std::vector<double> t, x, y, z, ut, ux, uy, uz, tau;   // table in coordinate time (ascending)
     double t_cam = 0, t_span = 0;                         // camera coordinate time, shutter span
     double sigma = 0.05, intensity = 1.0, T_emit = 9000, p_g = 4.0, decay = 0.05, steady = 0.0;
+    double extinction = 1.0;                              // gas in front dims it by T^extinction (1 = physical)
     std::vector<std::pair<double, double>> pulses;        // (tau_start, duration) proper time
     bool at(double tq, double pos[3], double u[4], double& tq_tau) const {
         if (!on || t.size() < 2 || tq < t.front() || tq > t.back()) return false;
@@ -201,6 +202,7 @@ struct Scene {
     double pixel_sigma = 0.45;
     double ds_scale = 3.0;
     int spp_min = 4;
+    int spp_beacon = 64;   // samples for pixels near the relativistic beacon (never stops early)
     double var_thresh = 0.02;
     DiskParams disk;
     bool disk_on = true;
@@ -282,6 +284,7 @@ struct TraceResult {
     bool touched = false;  // entered the dense disk slab
     bool hazed = false;    // passed through the haze region
     double rmin = 1e30;
+    double bnear = 1e30;   // closest approach to the beacon, in beacon sigmas squared (pass A)
     RGB disk, haze, beacon;
     float T = 1.f;         // transmittance through the gas
 };
@@ -359,7 +362,10 @@ struct Tracer {
                     }
                 }
             }
-            if (shade && S->beacon.on) beacon_segment(p0, ph, kt, time, R);
+            if (S->beacon.on) {
+                if (shade) beacon_segment(p0, ph, kt, time, R);
+                else R.bnear = std::min(R.bnear, beacon_r2(p0, ph) / (S->beacon.sigma * S->beacon.sigma));
+            }
             path += chord;
             d0 = d1;
             rprev = r;
@@ -368,28 +374,66 @@ struct Tracer {
         R.escaped = false;
     }
 
+    // Closest approach of the photon chord p0-p1 to the beacon in space-time: the beacon moves (near
+    // the horizon at a good fraction of c) while the photon crosses the chord, so its position is taken
+    // at the photon's own time, b(t) ~ b(tq) + v (t - tq), and the solve is iterated. Evaluating it at
+    // the chord's mid-time instead made hits depend on where the step boundaries fell: per-frame flicker
+    // and dropouts once sigma was a couple of pixels (final run, S15).
+    // Returns the squared miss distance of the (unbounded) relative line; `su` is its parameter (may lie
+    // outside [0, 1]), `w` the fraction of the Gaussian's line integral that falls inside this chord, so a
+    // crossing split over two chords sums to one crossing (per-chord peak sampling double-counted them).
+    double beacon_closest(const Photon& p0, const Photon& p1, double tbase, double& su, double& w, double bp[3],
+                          double bu[4], double& btau) const {
+        const Beacon& B = S->beacon;
+        const double t0 = tbase + p0.t, dt = p1.t - p0.t;
+        const double d[3] = {p1.x[0] - p0.x[0], p1.x[1] - p0.x[1], p1.x[2] - p0.x[2]};
+        double r2 = 1e30, ee = 0;
+        su = 0.5;
+        for (int it = 0; it < 3; ++it) {
+            const double tq = t0 + std::clamp(su, 0.0, 1.0) * dt;
+            if (!B.at(tq, bp, bu, btau)) return 1e30;
+            const double iu = 1.0 / std::max(bu[0], 1e-12);
+            const double v[3] = {bu[1] * iu, bu[2] * iu, bu[3] * iu};      // dx/dt
+            double w0[3], e[3];
+            for (int i = 0; i < 3; ++i) {
+                w0[i] = p0.x[i] - bp[i] + v[i] * (tq - t0);              // relative position at s = 0
+                e[i] = d[i] - v[i] * dt;                                  // relative motion over the chord
+            }
+            ee = e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
+            su = -(w0[0] * e[0] + w0[1] * e[1] + w0[2] * e[2]) / std::max(ee, 1e-30);
+            double c[3];
+            for (int i = 0; i < 3; ++i) c[i] = w0[i] + su * e[i];
+            r2 = c[0] * c[0] + c[1] * c[1] + c[2] * c[2];
+        }
+        if (!B.at(t0 + std::clamp(su, 0.0, 1.0) * dt, bp, bu, btau)) return 1e30;
+        const double q = std::sqrt(ee) / (std::sqrt(2.0) * B.sigma);
+        w = 0.5 * (std::erf((1.0 - su) * q) + std::erf(su * q));
+        return r2;
+    }
+
+    // squared distance of the chord from the beacon at the shutter centre (geometry only, pass A)
+    double beacon_r2(const Photon& p0, const Photon& p1) const {
+        double su, w, bp[3], bu[4], btau;
+        double r2 = beacon_closest(p0, p1, S->beacon.t_cam, su, w, bp, bu, btau);
+        return (su < -1.0 || su > 2.0) ? 1e30 : r2;    // the line's closest point well outside this chord
+    }
+
     void beacon_segment(const Photon& p0, const Photon& p1, double kt, double time, TraceResult& R) const {
         const Beacon& B = S->beacon;
         // `time` carries the sample's shutter offset relative to the disk clock; map it onto the
         // beacon's clock through the shutter span
         double tshift = (S->shutter_dt > 0) ? (time - S->time) / S->shutter_dt * B.t_span : 0.0;
-        double tq = B.t_cam + tshift + 0.5 * (p0.t + p1.t);
-        double bp[3], bu[4], btau;
-        if (!B.at(tq, bp, bu, btau)) return;
-        double d[3] = {p1.x[0] - p0.x[0], p1.x[1] - p0.x[1], p1.x[2] - p0.x[2]};
-        double w[3] = {bp[0] - p0.x[0], bp[1] - p0.x[1], bp[2] - p0.x[2]};
-        double dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
-        double sp = std::clamp((w[0] * d[0] + w[1] * d[1] + w[2] * d[2]) / std::max(dd, 1e-30), 0.0, 1.0);
-        double c[3] = {p0.x[0] + sp * d[0] - bp[0], p0.x[1] + sp * d[1] - bp[1], p0.x[2] + sp * d[2] - bp[2]};
-        double r2 = c[0] * c[0] + c[1] * c[1] + c[2] * c[2];
-        if (r2 > 36.0 * B.sigma * B.sigma) return;
+        double su, w, bp[3], bu[4], btau;
+        double r2 = beacon_closest(p0, p1, B.t_cam + tshift, su, w, bp, bu, btau);
+        if (r2 > 36.0 * B.sigma * B.sigma || w < 1e-6) return;
         double env = B.envelope(btau);
         if (env <= 0) return;
+        const double sp = std::clamp(su, 0.0, 1.0);
         double k[3] = {p0.k[0] * (1 - sp) + p1.k[0] * sp, p0.k[1] * (1 - sp) + p1.k[1] * sp, p0.k[2] * (1 - sp) + p1.k[2] * sp};
         double kdu = kt * bu[0] + k[0] * bu[1] + k[1] * bu[2] + k[2] * bu[3];
         double g = std::clamp(1.0 / std::max(kdu, 1e-9), 1e-4, 50.0);
-        double I = B.intensity * env * std::pow(g, B.p_g) * std::exp(-0.5 * r2 / (B.sigma * B.sigma));
-        R.beacon += (*bb)(B.T_emit * g) * float(I * R.T);
+        double I = B.intensity * env * std::pow(g, B.p_g) * std::exp(-0.5 * r2 / (B.sigma * B.sigma)) * w;
+        R.beacon += (*bb)(B.T_emit * g) * float(I * (B.extinction == 1.0 ? R.T : std::pow(R.T, B.extinction)));
     }
 
     // Outside the dense slab only the smooth haze remains: one jittered sample per segment.
@@ -473,6 +517,7 @@ int main(int argc, char** argv) {
     S.pixel_sigma = J.value("pixel_sigma", 0.45);
     S.ds_scale = J.value("ds_scale", 3.0);
     S.spp_min = J.value("spp_min", 4);
+    S.spp_beacon = J.value("spp_beacon", 64);
     S.var_thresh = J.value("var_thresh", 0.02);
     S.out = J.value("out", std::string("out.exr"));
     S.threads = J.value("threads", 0);
@@ -559,6 +604,7 @@ int main(int argc, char** argv) {
         B.t_cam = b.value("t_cam", 0.0); B.t_span = b.value("t_span", 0.0);
         B.sigma = b.value("sigma", 0.05); B.intensity = b.value("intensity", 1.0);
         B.T_emit = b.value("T", 9000.0); B.p_g = b.value("p_g", 4.0); B.decay = b.value("decay", 0.05);
+        B.extinction = b.value("extinction", 1.0);
         B.steady = b.value("steady", 0.0);
         if (b.contains("pulses")) for (const auto& p : b["pulses"]) B.pulses.push_back({p[0].get<double>(), p[1].get<double>()});
     }
@@ -595,7 +641,7 @@ int main(int argc, char** argv) {
         double u = NT == 1 ? 0.5 : (ti + 0.5) / NT;
         CamPose cp = pose_at(S, u);
         Tetrad T = make_tetrad(cp);
-        struct GridRay { Vec3 d; double g; unsigned char esc, touched, hazed; double rmin; };
+        struct GridRay { Vec3 d; double g; unsigned char esc, touched, hazed; double rmin, bnear; };
         std::vector<GridRay> grid(size_t(GW) * GH);
 #pragma omp parallel for schedule(dynamic, 4)
         for (int j = 0; j < GH; ++j)
@@ -606,6 +652,7 @@ int main(int argc, char** argv) {
                 TR.trace(ph, kt, false, S.time, pix_angle, nullptr, R);
                 GridRay& G = grid[size_t(j) * GW + i];
                 G.esc = R.escaped; G.touched = R.touched; G.hazed = R.hazed; G.rmin = R.rmin;
+                G.bnear = R.bnear;
                 G.d = R.escaped ? (S.sky_rot * R.dir) : Vec3(0, 0, 1);
                 G.g = R.g_inf;
             }
@@ -619,7 +666,11 @@ int main(int argc, char** argv) {
                 bool touched = c[0]->touched || c[1]->touched || c[2]->touched || c[3]->touched;
                 double rmin = std::min(std::min(c[0]->rmin, c[1]->rmin), std::min(c[2]->rmin, c[3]->rmin));
                 bool hazed = c[0]->hazed || c[1]->hazed || c[2]->hazed || c[3]->hazed;
-                if (touched || nesc < 4 || rmin < 3.2 * TR.rcap) needs_ss[pi] = 2;
+                // a corner ray within 20 sigma of the beacon: the point may land here (lensed, demagnified
+                // near the critical curve, moving through the shutter) -> full sampling, no early stop
+                double bnear = std::min(std::min(c[0]->bnear, c[1]->bnear), std::min(c[2]->bnear, c[3]->bnear));
+                if (bnear < 400.0) needs_ss[pi] = 3;
+                else if ((touched || nesc < 4 || rmin < 3.2 * TR.rcap) && needs_ss[pi] < 2) needs_ss[pi] = 2;
                 else if (hazed && needs_ss[pi] == 0) needs_ss[pi] = 1;
                 if (nesc == 0) continue;
                 // footprint on the celestial sphere (galactic frame)
@@ -686,14 +737,16 @@ int main(int argc, char** argv) {
                 continue;
             }
             Rng rng(uint64_t(S.seed) * 0x9E3779B97F4A7C15ULL + uint64_t(Y0 + j) * 100003ULL + uint64_t(X0 + i));
-            int N = (needs_ss[pi] == 2 || (S.beacon.on && !S.disk_on)) ? S.spp : S.spp_haze;
+            int N = (needs_ss[pi] >= 2 || (S.beacon.on && !S.disk_on)) ? S.spp : S.spp_haze;
+            const bool near_beacon = needs_ss[pi] == 3;
+            if (near_beacon) N = std::max(N, S.spp_beacon);
             RGB sd, sh, ss, sb;
             float sT = 0, shole = 0;
             int sq = std::max(1, int(std::sqrt(double(N))));
             double lsum = 0, l2sum = 0;
             int k = 0;
             for (; k < N; ++k) {
-                if (k >= S.spp_min && k >= 4 && (k & 3) == 0) {
+                if (!near_beacon && k >= S.spp_min && k >= 4 && (k & 3) == 0) {
                     // adaptive: stop when the standard error of the mean luminance is small
                     double m = lsum / k, var = std::max(0.0, l2sum / k - m * m);
                     double se = std::sqrt(var / k);
@@ -795,6 +848,6 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "stats: rays %ld  steps/ray %.1f  evals/ray %.1f\n", long(g_rays), double(g_steps) / std::max(1L, long(g_rays)),
                  double(g_evals) / std::max(1L, long(g_rays)));
     std::fprintf(stderr, "tracer: %dx%d  %.2fs  (%ld supersampled rays, %.1f%% px supersampled)  -> %s\n", CW, CH, secs,
-                 long(nss), 100.0 * std::count(needs_ss.begin(), needs_ss.end(), 2) / std::max(npx, 1L), S.out.c_str());
+                 long(nss), 100.0 * std::count_if(needs_ss.begin(), needs_ss.end(), [](unsigned char v) { return v >= 2; }) / std::max(npx, 1L), S.out.c_str());
     return 0;
 }

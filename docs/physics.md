@@ -620,6 +620,26 @@ Freezing, slowing, reddening, fading and the echoes all follow automatically.
 
 ---
 
+### Sampling the beacon (numerics, 2026-10-04)
+
+The beacon is a Gaussian emitter of width σ ≈ 2.2 px moving on its worldline, picked up by each photon
+chord of the integrator. Three things have to be right for its flux to be smooth from frame to frame:
+
+1. **Space-time closest approach.** Near the horizon the beacon moves at a good fraction of c, i.e. several
+   σ during one chord's time span. Its position is taken at the photon's own time along the chord
+   (b(t) ≈ b(t_q) + v (t − t_q), v = u^i/u^t, solved and iterated), not at the chord's mid-time.
+2. **Line integral, not peak sampling.** Each chord contributes the fraction of the Gaussian's line integral
+   that falls inside it, ½[erf((1−s)q) + erf(s q)] with q = |e|/(√2 σ), so a crossing split over two chords
+   counts once.
+3. **Sampling where it lands.** Pass A records each corner ray's closest approach; pixels within 20 σ are
+   supersampled (64 samples, no adaptive early stop, whose variance test ignored the beacon).
+
+The first final render (run 37163704098) had (1) and (2) wrong: at 1920 px S15's point flickered by
+×2–×200 between frames and dropped out on single frames in the middle of the last motif. The beacon-only
+acceptance test had missed it because it rendered with the disk off, where every pixel is supersampled
+and the error averages out. `shots/S15/beacon_check.py` now tests the shot as rendered (disk on, final
+resolution, every frame).
+
 ## 10. Rendering recipe (pseudocode)
 
 ### 10.1 Camera launch (Kerr–Schild)
