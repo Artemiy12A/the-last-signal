@@ -1,10 +1,10 @@
 {
   "note": "Committing a change to this file starts the render farm (.github/workflows/tls90-render.yml).",
-  "quality": "preview",
+  "quality": "final",
   "frames": "all",
   "every": 1,
-  "jobs": 20,
-  "publish": "prerelease",
-  "tag": "tls90-preview-2",
+  "jobs": 60,
+  "publish": "release",
+  "tag": "tls90-final",
   "attempt": 1
 }

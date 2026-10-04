@@ -25,7 +25,7 @@ COST = {
     # fitted to the preview-2 farm run's shard times (2026-10-03), x4 to final units; Blender-heavy shots carry
     # an extra x1.5 because final samples (192 vs 48) cost more than the tracer's spp step
     "BLK0": 1, "BLK1": 1, "TITLE": 3, "BTN": 2,
-    "S01": 90, "S02": 260, "S03": 280, "S04": 40, "S05": 110, "S06": 275, "S07": 215, "S08": 300,
+    "S01": 90, "S02": 260, "S03": 280, "S04": 40, "S05": 110, "S06": 275, "S07": 215, "S08": 170,
     "S09": 420, "S10": 175, "S11": 470, "S12": 150, "S13": 210, "S14": 490, "S15": 155,
 }
 QSCALE = {"draft": 1 / 16, "preview": 1 / 4, "final": 1.0}

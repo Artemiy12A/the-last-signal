@@ -92,7 +92,7 @@ def params(t, q):
     P = CompParams(exposure=0.3, gains={"sky": 0.5, "stars": 0.45, "ship_env": 0.8, "ship_key": 1.2, "ship_lamps": 1.0},
                    bloom=0.04, glare=0.015, streak=0.06, streak_threshold=14.0, halation=0.06, vignette=0.38,
                    punch=0.3, look_sat=1.15, white=(1.0, 0.95, 0.88))
-    bl = {"controls": controls(t, engine=0.1), "probe": probe(100.0, strength=0.35),
+    bl = {"controls": controls(t, engine=0.1), "probe": probe(100.0, strength=0.35), "samples_scale": 0.35,   # volumes: denoised at ~64 samples
           "keys": [{"dir": list(map(float, LIGHT)), "color": [1.0, 0.74, 0.46], "strength": 14.0, "angle": 1.0}],
           "props": [{"kind": "debris", "t": t, "rocks": ROCKS, "vel": list(map(float, VEL)),
                      "dust_box": {"center": [0.0, 80.0, 20.0], "size": [1100.0, 1100.0, 420.0]},

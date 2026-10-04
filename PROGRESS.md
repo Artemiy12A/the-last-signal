@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**Phase 3: preview cut 2 published (2026-10-03). Next: review round 2, then the final render.**
+**Phase 4: final render on the farm (`tls90-final`, 1920x804, 60 shards, ~8.5 h). Review round 2 done.**
 
 Previews published so far:
 - `tls90-preview-2` (preview 960 px, every frame, sound; after review round 1): https://github.com/Artemiy12A/the-last-signal/releases/tag/tls90-preview-2
@@ -43,6 +43,17 @@ Previews published so far:
   - S11 true speck; S12 black shadow; S13 blue shift; title heavier + ring echo + grain.
   - Sound: S15 onsets from the EDL, reveal hit + riser from the motif (no braam/Shepard), Act I
     +8 dB, LRA 12.4 LU.
+
+- Review round 2 (independent reviewer on the preview-2 MP4, 2026-10-03), acted on:
+  - S15 beacon blackouts fixed (sub-pixel emitter aliasing): emitter >= 2.2 px, flux-conserving;
+    acceptance test = beacon-only render of all 204 S15 frames at 960 px, no zero-flux frame; flashes
+    on/off (first short 594 vs ember 0.4), colour G/R 0.40 -> 0.02 (deep red), front-loaded fall.
+  - The mix ducks 9 dB under the last motif (beacon ~11 dB above everything else).
+  - S14 rebuilt (flush xenon dome on the hull edge, shadow + arch behind); S14/S15 cut on the long flash.
+  - S10 reveal lands on the hit; S09 hole dissolved in 220 px bokeh; S07 arc only; S06 crescent.
+  - S11 from below the disk plane, ship on the bright band; S12 disk floor, no star swirl.
+  - Title larger, the motif blinking as a red point under it; wide interference tears; S05 disk off.
+  - Farm costs fitted to preview-2 shard times; per-shot budgets (S14, S08, S09); master <= 2 GB guard.
 
 ## Next
 
